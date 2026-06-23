@@ -412,8 +412,8 @@ from a **Mac host terminal** via `docker exec -it hermes ...`
 ## WhatsApp group IDs (Jim's known groups)
 | Group | Chat ID |
 |---|---|
-| Kelly's group (active, "can you reply to this group?") | `120363408898559658@g.us` |
-| TO Changes | `120363409212843238@g.us` |
+| Kelly's group (active, "can you reply to this group?") | `${HERMES_WHATSAPP_KELLY_GROUP}` |
+| TO Changes | `${HERMES_WHATSAPP_HOME_GROUP}` |
 
 To identify an unknown group: have someone send a message from it to the bot,
 then `grep "inbound message: platform=whatsapp" /opt/data/logs/gateway.log | tail -5`

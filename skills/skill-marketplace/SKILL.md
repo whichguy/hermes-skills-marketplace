@@ -50,7 +50,7 @@ the box without editing SKILL.md.
 **Every user-tunable value must be declared in frontmatter — never hardcoded
 in scripts or prose.**
 
-A skill downloaded by Agent A in San Ramon, CA must work for Agent B in
+A skill downloaded by Agent A in Your City, CA must work for Agent B in
 London without editing a single line.
 
 | Layer | Frontmatter key | What | Runtime storage |

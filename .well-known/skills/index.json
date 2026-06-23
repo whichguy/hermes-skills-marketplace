@@ -1,7 +1,4 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Hermes Skills Marketplace",
-  "description": "Custom skills marketplace for Hermes Agent — config-code separation enforced",
   "skills": [
     {
       "name": "apple-macos-apps",
@@ -18,7 +15,6 @@
         "apple-macos-apps.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/apple-macos-apps/SKILL.md"
     },
     {
@@ -38,7 +34,6 @@
         "bfl-api.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/bfl-api/SKILL.md"
     },
     {
@@ -58,7 +53,6 @@
         "computer-use.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/computer-use/SKILL.md"
     },
     {
@@ -78,7 +72,6 @@
         "cron-llm-review-house-style.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/cron-llm-review-house-style/SKILL.md"
     },
     {
@@ -97,7 +90,6 @@
         "email-utils.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/email-utils/SKILL.md"
     },
     {
@@ -117,7 +109,6 @@
         "flux-best-practices.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/flux-best-practices/SKILL.md"
     },
     {
@@ -137,7 +128,6 @@
         "hardware-repair-research.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/hardware-repair-research/SKILL.md"
     },
     {
@@ -156,7 +146,6 @@
         "hermes-config-git-backup.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/hermes-config-git-backup/SKILL.md"
     },
     {
@@ -174,7 +163,6 @@
       "requires_toolsets": [],
       "config_keys": [],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/hermes-ecosystem-research/SKILL.md"
     },
     {
@@ -194,7 +182,6 @@
         "hermes-email-gateway.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/hermes-email-gateway/SKILL.md"
     },
     {
@@ -214,7 +201,6 @@
         "hermes-whatsapp-gateway.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/hermes-whatsapp-gateway/SKILL.md"
     },
     {
@@ -234,7 +220,6 @@
         "home-assistant-smart-home-control.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/home-assistant-smart-home-control/SKILL.md"
     },
     {
@@ -254,7 +239,6 @@
         "html-artifact.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/html-artifact/SKILL.md"
     },
     {
@@ -274,7 +258,6 @@
         "live-event-status-updates.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/live-event-status-updates/SKILL.md"
     },
     {
@@ -294,28 +277,7 @@
         "messaging-platform-formatting.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/messaging-platform-formatting/SKILL.md"
-    },
-    {
-      "name": "personal-context-integration",
-      "description": "Privacy-first personal profile and relationship-graph integration for Hermes memory, local context files, and ambient cron jobs.",
-      "category": "productivity",
-      "version": "1.1.0",
-      "author": "Hermes Agent",
-      "license": "MIT",
-      "platforms": [
-        "linux",
-        "macos",
-        "windows"
-      ],
-      "requires_toolsets": [],
-      "config_keys": [
-        "personal-context-integration.enabled"
-      ],
-      "required_env": [],
-      "required_credentials": [],
-      "path": "skills/personal-context-integration/SKILL.md"
     },
     {
       "name": "scheduled-research-briefs",
@@ -334,7 +296,6 @@
         "scheduled-research-briefs.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/scheduled-research-briefs/SKILL.md"
     },
     {
@@ -354,7 +315,6 @@
         "script-first-cron-design.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/script-first-cron-design/SKILL.md"
     },
     {
@@ -374,7 +334,6 @@
         "self-healing-cron-watchdogs.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/self-healing-cron-watchdogs/SKILL.md"
     },
     {
@@ -394,7 +353,6 @@
         "simplify-code.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/simplify-code/SKILL.md"
     },
     {
@@ -419,7 +377,6 @@
         "skill-marketplace.default_author"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/skill-marketplace/SKILL.md"
     },
     {
@@ -439,7 +396,6 @@
         "skill-testing-harness.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/skill-testing-harness/SKILL.md"
     },
     {
@@ -459,7 +415,6 @@
         "usaw-meet-card-parser.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/usaw-meet-card-parser/SKILL.md"
     },
     {
@@ -479,7 +434,6 @@
         "usaw-to-schedule.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/usaw-to-schedule/SKILL.md"
     },
     {
@@ -498,28 +452,7 @@
         "versioning-hermes-home.enabled"
       ],
       "required_env": [],
-      "required_credentials": [],
       "path": "skills/versioning-hermes-home/SKILL.md"
-    },
-    {
-      "name": "worldcup-update-template",
-      "description": "Jim's preferred Telegram format for World Cup match-day updates: blockquote header-card layout (B3-b) with per-match duration lines. Times in Pacific when Jim is home, Mountain Time (MT) when travelin",
-      "category": "productivity",
-      "version": "1.1.0",
-      "author": "Hermes Agent",
-      "license": "MIT",
-      "platforms": [
-        "linux",
-        "macos",
-        "windows"
-      ],
-      "requires_toolsets": [],
-      "config_keys": [
-        "worldcup-update-template.enabled"
-      ],
-      "required_env": [],
-      "required_credentials": [],
-      "path": "skills/worldcup-update-template/SKILL.md"
     }
   ]
 }

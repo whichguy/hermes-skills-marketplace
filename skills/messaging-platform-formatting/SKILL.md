@@ -60,8 +60,8 @@ For Telegram, use standard Markdown in the final response and let Hermes convert
 These are **non-negotiable** — Jim corrected these twice in one session:
 
 1. **Business/place names** — always hyperlink to the business website: `[VASA Fitness](https://vasafitness.com/...)`
-2. **Addresses** — always hyperlink to Google Maps: `[7655 N Union Blvd, Colorado Springs](https://maps.google.com/?q=...)`
-3. **Phone numbers** — always wrap in `tel:` link: `[(719) 302-5540](tel:7193025540)`
+2. **Addresses** — always hyperlink to Google Maps: `[7655 N Union Blvd, Venue City](https://maps.google.com/?q=...)`
+3. **Phone numbers** — always wrap in `tel:` link: `[(555) 123-4567](tel:5551234567)`
 4. **Event times/dates** — always hyperlink to a pre-populated Google Calendar add-event URL (see `references/google-calendar-deeplink.md` for the URL template)
 5. **Never raw URLs** — always use `[named label](url)` format
 
@@ -136,12 +136,12 @@ uv run --frozen --extra dev --extra messaging python -m pytest tests/gateway/tes
 
 ## References
 
-- `references/local-business-research.md` — local business lookup workflow, Yelp pitfalls, Colorado Springs venue notes, Jim's required output format for business recommendations.
+- `references/local-business-research.md` — local business lookup workflow, Yelp pitfalls, Venue City venue notes, Jim's required output format for business recommendations.
 - `references/hermes-telegram-formatting.md` — concise notes from a source inspection of Hermes Telegram formatting paths and practical guidance.
 
 ## Jim's Time Format Preference
 
-All times shown in **Mountain Time (MT)** while Jim is in Colorado Springs for USAW NCW (Jun 20–28 2026); Pacific Time when home in San Ramon. **Short labels only** — write `9:30 PM`, state the timezone **once** at the top of the message, omit it on every subsequent time. Never append tz suffix per line — it clutters.
+All times shown in **Mountain Time (MT)** while Jim is in Venue City for USAW NCW (Jun 20–28 2026); Pacific Time when home in Your City. **Short labels only** — write `9:30 PM`, state the timezone **once** at the top of the message, omit it on every subsequent time. Never append tz suffix per line — it clutters.
 - `references/telegram-markdownv2-field-notes.md` — external field notes from Reddit/forum/dev-community research on MarkdownV2 escaping, parse modes, links, dynamic values, and table pitfalls.
 - `references/telegram-formatting-recency-verification.md` — recency-weighted verification workflow for separating current Telegram/Hermes evidence from older forum lore, including the focused Hermes formatter test command.
 - `references/recommendation-cards-and-quick-replies.md` — user-preferred Telegram pattern for recommendation-first cards, risk/status emojis, and `A/B/C` or `1/2/3` quick replies.

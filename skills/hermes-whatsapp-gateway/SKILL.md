@@ -126,9 +126,9 @@ and key paths documented in:
 must come from a Mac host terminal via `docker exec -it hermes ...`
 
 **Known WhatsApp group IDs:**
-- **TO Changes** (USAW meet coordination) = `120363426893630875@g.us`
-- Jim's home/personal channel = `120363409212843238@g.us` ⚠️ this is NOT the TO Changes group
-- Kelly's group = `120363408898559658@g.us`
+- **TO Changes** (USAW meet coordination) = `${USAW_WHATSAPP_TO_CHANGES_GROUP}`
+- Jim's home/personal channel = `${HERMES_WHATSAPP_HOME_GROUP}` ⚠️ this is NOT the TO Changes group
+- Kelly's group = `${HERMES_WHATSAPP_KELLY_GROUP}`
 
 **To identify an unknown group ID:** send a test ping (`{"chatId": "<id>@g.us", "message": "test"}`), then ask the user which group it landed in. The bridge log at `/opt/data/whatsapp/bridge.log` also shows outbound `chatId` values for recently sent messages.
 
@@ -155,7 +155,7 @@ No `url generation failed` lines from the new PID = fixed.
 ```bash
 curl -s -X POST http://localhost:3000/send \
   -H "Content-Type: application/json" \
-  -d '{"chatId":"120363409212843238@g.us","message":"your message"}'
+  -d '{"chatId":"${HERMES_WHATSAPP_HOME_GROUP}","message":"your message"}'
 # → {"success":true,"messageId":"...","messageIds":["..."]}
 ```
 From Python: `requests.post("http://localhost:3000/send", json={"chatId": jid, "message": text})`.

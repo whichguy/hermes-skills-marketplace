@@ -6,7 +6,7 @@ No pip in this env -> run via: uv run --with openpyxl python parse_to_schedule.p
 
 Usage:
   parse_to_schedule.py <xlsx> --tab "2026 NCW"
-  parse_to_schedule.py <xlsx> --person "Kelly Wiese"
+  parse_to_schedule.py <xlsx> --person "Example Person"
 """
 import sys, re, argparse, datetime
 

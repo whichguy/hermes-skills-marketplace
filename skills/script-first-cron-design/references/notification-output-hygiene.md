@@ -72,7 +72,7 @@ the mailbox emoji: `🏠 [Gmail thread](url)`.
 
 ## 6. Compact lines over label stacks
 
-Prefer `**Wallin CPA** (🟡 Review soon)` + `• 🏠 personal` over a stack of
+Prefer `**Your CPA** (🟡 Review soon)` + `• 🏠 personal` over a stack of
 `• Source:` / `• Account:` / `• Urgency:` / `• Detail:` bullets that mostly
 repeat a template.
 

@@ -21,7 +21,7 @@ https://calendar.google.com/calendar/r/eventedit?text=EVENT+TITLE&dates=START/EN
 - Do NOT append `Z` to dates — let Google Calendar infer timezone from location
 - All spaces → `+`, special chars → `%XX` percent-encoding
 - Keep `text` concise — it becomes the calendar event title
-- Jim's timezone: **MT** while in Colorado Springs (Jun 20–28 2026), **PT** at home in San Ramon
+- Jim's timezone: **MT** while in Venue City (Jun 20–28 2026), **PT** at home in Your City
 
 ## Example — VASA Fitness steam sauna morning visit
 

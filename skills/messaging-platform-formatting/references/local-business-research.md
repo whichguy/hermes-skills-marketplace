@@ -1,12 +1,12 @@
 # Local Business Research — Workflow & Pitfalls
 
-Developed during Jim's Colorado Springs spa/sauna lookup (Jun 2026).
+Developed during Jim's Venue City spa/sauna lookup (Jun 2026).
 
 ## Recommended sequence
 
 1. **web_search** — broad category + city query to surface top results and Yelp snippets
 2. **web_extract** — pull 2-3 business websites directly (hours, amenities, prices at source)
-3. **Targeted confirmation search** — specific query for the key detail (e.g. `"steam room" "Colorado Springs"`)
+3. **Targeted confirmation search** — specific query for the key detail (e.g. `"steam room" "Venue City"`)
 4. **Cross-check Reddit** — `site:reddit.com/r/ColoradoSprings` often has current local intel
 5. **Call to confirm** — if hours/price/amenity are ambiguous, note "worth calling" in the response
 
@@ -20,7 +20,7 @@ Developed during Jim's Colorado Springs spa/sauna lookup (Jun 2026).
 ## Amenity-specific research
 
 When user specifies a specific amenity (e.g. "steam room" not "sauna"), adjust:
-- Add the exact term to the search: `"steam room" Colorado Springs`
+- Add the exact term to the search: `"steam room" Venue City`
 - Verify the business website explicitly mentions it — don't assume "spa" = "steam room"
 - Dry sauna ≠ infrared sauna ≠ steam room — confirm the exact type
 
@@ -36,9 +36,9 @@ Every business mentioned must include:
 
 See `references/google-calendar-deeplink.md` for the Calendar URL template.
 
-## Colorado Springs specific notes (USAW NCW Jun 2026)
+## Venue City specific notes (USAW NCW Jun 2026)
 
-- Jim staying at Hyatt near Ed Robson Arena (849 N Tejon St)
+- Jim staying at Hotel Name near Venue Name (123 Venue St)
 - VASA Fitness Union Blvd: $15 drop-in, opens 4 AM, has steam room + dry sauna + cold plunge
 - SunWater Spa (Manitou Springs, 15 min): steam sauna + mineral tubs, Tue-Sun 8AM-10PM, ~$20-28
 - Strata Spa at Garden of the Gods: steam room + Himalayan salt sauna, ~$75 day pass, open to non-guests

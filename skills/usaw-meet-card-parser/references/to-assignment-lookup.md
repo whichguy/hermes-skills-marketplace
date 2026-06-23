@@ -44,7 +44,7 @@ wiese = [a for a in data if 'wiese' in a.get('person','').lower()]  # returns []
 
 | Field | Example | Notes |
 |-------|---------|-------|
-| `person` | `"Kelly Wiese"` | Full name as it appears in sheet |
+| `person` | `"Example Person"` | Full name as it appears in sheet |
 | `day` | `"2026-06-21"` | ISO date string |
 | `sess` | `11` | Session number (int) |
 | `plat` | `"BLUE"` | Platform: RED/WHITE/BLUE |
@@ -68,7 +68,7 @@ As of Jun 21, 2026 sheet snapshot: **37 assignments** across 4 days (Jun 20–23
 No assignments visible after Tue Jun 23 — later sessions may not yet be populated.
 
 - **Jim (James Wiese)** 🟦: 19 assignments
-- **Kelly Wiese** 🟪: 18 assignments
+- **Example Person** 🟪: 18 assignments
 - Both primarily on 🔴 RED platform, NAT tag
 - Roles: Referee (most common), Weigh-in, Speaker, Marshal
 

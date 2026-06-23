@@ -41,10 +41,8 @@
         "hermes-whatsapp-gateway",
         "home-assistant-smart-home-control",
         "messaging-platform-formatting",
-        "personal-context-integration",
         "usaw-meet-card-parser",
-        "usaw-to-schedule",
-        "worldcup-update-template"
+        "usaw-to-schedule"
       ]
     },
     {

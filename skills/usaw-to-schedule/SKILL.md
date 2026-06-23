@@ -38,7 +38,7 @@ timekeepers, speakers, weigh-in officials) to competition sessions.
 
 ## Output format preferences (Jim)
 
-- **All times in MT** (Mountain Time) during NCW and any Colorado Springs event.
+- **All times in MT** (Mountain Time) during NCW and any Venue City event.
 - **Short labels only:** `9:30 PM` — NOT `9:30 PM MT` on every line. State the timezone once at the top of the message, not per-line.
 - **Platform as colored emoji:** 🔴 RED, ⚪ WHITE, 🔵 BLUE — not `[RED]` or plain text.
 - **Session as `S1`, `S2`** — not `Sess 1`, `Session 1`.
@@ -50,7 +50,7 @@ timekeepers, speakers, weigh-in officials) to competition sessions.
 - Finding a specific person's assignments across the meet
 - Checking session times, weigh-in times, weight classes
 - Carefully updating sign-ups (only with explicit approval — these are shared,
-  owned by USAW staff, e.g. `pedro.meloni@usaweightlifting.org`)
+  owned by USAW staff, e.g. `staff@usaweightlifting.org`)
 
 ## Key documents (2026 Nationals)
 
@@ -271,7 +271,7 @@ uv run --quiet --with openpyxl python \
 # Find one person's assignments across all tabs
 uv run --quiet --with openpyxl python \
   ${HERMES_HOME:-$HOME/.hermes}/skills/productivity/usaw-to-schedule/scripts/parse_to_schedule.py \
-  /tmp/to_signup.xlsx --person "Kelly Wiese"
+  /tmp/to_signup.xlsx --person "Example Person"
 ```
 
 ## Updating the sheet (DANGER — shared, owned by USAW)
@@ -456,7 +456,7 @@ API call per tick — and only downloads + diffs the xlsx when the revision ID
 changes. See `script-first-cron-design → references/drive-revision-change-watcher.md`
 for the full 3-tier precheck-LLM pattern and the cell-level diff engine.
 
-**Delivery:** The cron job (`3a8b59f34fdd`) delivers to `telegram,whatsapp:120363426893630875@g.us` (the "TO Changes" WhatsApp group). Both channels receive the formatted alert when any row changes. The WhatsApp group ID `120363426893630875@g.us` is the "TO Changes" meet coordination group.
+**Delivery:** The cron job (`3a8b59f34fdd`) delivers to `telegram,whatsapp:${USAW_WHATSAPP_TO_CHANGES_GROUP}` (the "TO Changes" WhatsApp group). Both channels receive the formatted alert when any row changes. The WhatsApp group ID `${USAW_WHATSAPP_TO_CHANGES_GROUP}` is the "TO Changes" meet coordination group.
 
 **Cadence:** Every 15 minutes (`*/15 * * * *`), `no_agent=True` — the script outputs the final formatted message directly, zero LLM tokens.
 
@@ -510,7 +510,7 @@ for (day, sess), roles in sorted(sessions.items()):
     role_parts = [f"{PLAT_EMOJI.get(r['plat'].upper(), '⬜')} {r['role']}"
                   for r in sorted(roles, key=lambda x: x['start'] or '')]
     title = f"🏋️ NCW TO — S{sess:02d} · {' · '.join(role_parts)}"
-    location = "Ed Robson Arena, 849 N Tejon St, Colorado Springs, CO 80903"
+    location = "Venue Name, 123 Venue St, Venue City, CO VENUE_ZIP"
 
     cmd = (f'{GAPI} --account personal calendar create '
            f'--summary "{title}" --start {start_iso} --end {end_iso} '
@@ -600,10 +600,10 @@ See `references/sheet-data-analysis.md` for:
   helper takes a cell-accessor function so it works with both `openpyxl`
   worksheet objects AND raw cell dicts from the diff engine — one function,
   two call sites, zero duplication.
-- **Safe N-day lookback test pattern (manual replay without corrupting live state):** To force-replay recent sheet changes without touching `/opt/data/cron_state/usaw_to/`, use a standalone script that (1) fetches all revisions, (2) filters to those within a CUTOFF = `now_mt - timedelta(days=N)`, (3) downloads the last revision *before* the window as the baseline, (4) walks the window revisions as diffs, and (5) posts results directly — never reading or writing the live state file. Template: `/opt/data/scripts/usaw_test_run.py`. Post to TO Changes WhatsApp directly via `requests.post("http://localhost:3000/send", json={"chatId": "120363426893630875@g.us", "message": msg})`. To force a live-script test without corrupting state: save the state file, blank the `revisionId` key, run the script, then restore from backup.
-- **Group ID lookup:** The correct chatId for "TO Changes" is `120363426893630875@g.us`. The old ID `120363409212843238@g.us` goes to Jim's home/personal channel — NOT the TO Changes group. Always verify by sending a test ping before wiring up a cron. The bridge log at `/opt/data/whatsapp/bridge.log` shows outbound `chatId` values for recently sent messages — cross-reference to identify unknown groups.
+- **Safe N-day lookback test pattern (manual replay without corrupting live state):** To force-replay recent sheet changes without touching `/opt/data/cron_state/usaw_to/`, use a standalone script that (1) fetches all revisions, (2) filters to those within a CUTOFF = `now_mt - timedelta(days=N)`, (3) downloads the last revision *before* the window as the baseline, (4) walks the window revisions as diffs, and (5) posts results directly — never reading or writing the live state file. Template: `/opt/data/scripts/usaw_test_run.py`. Post to TO Changes WhatsApp directly via `requests.post("http://localhost:3000/send", json={"chatId": "${USAW_WHATSAPP_TO_CHANGES_GROUP}", "message": msg})`. To force a live-script test without corrupting state: save the state file, blank the `revisionId` key, run the script, then restore from backup.
+- **Group ID lookup:** The correct chatId for "TO Changes" is `${USAW_WHATSAPP_TO_CHANGES_GROUP}`. The old ID `${HERMES_WHATSAPP_HOME_GROUP}` goes to Jim's home/personal channel — NOT the TO Changes group. Always verify by sending a test ping before wiring up a cron. The bridge log at `/opt/data/whatsapp/bridge.log` shows outbound `chatId` values for recently sent messages — cross-reference to identify unknown groups.
 
-- **`parse_assignments(names=[""])` stores empty `person` field — use cell value instead:** When called with `names=[""]` (match everything), the function stores `person=name` where `name=""`, so every returned entry has `person: ""`. This is a bug in the current lib. Workaround: call with the explicit list `names=["James Wiese", "Kelly Wiese"]` for Jim/Kelly lookups, or patch the lib to store `v` (the cell value) instead of `name` when `name=""`. Affects `parse_assignments` and any snapshot diff built from it.
+- **`parse_assignments(names=[""])` stores empty `person` field — use cell value instead:** When called with `names=[""]` (match everything), the function stores `person=name` where `name=""`, so every returned entry has `person: ""`. This is a bug in the current lib. Workaround: call with the explicit list `names=["James Wiese", "Example Person"]` for Jim/Kelly lookups, or patch the lib to store `v` (the cell value) instead of `name` when `name=""`. Affects `parse_assignments` and any snapshot diff built from it.
 
 - **No bare URLs in cron output — always Markdown hyperlinks.** Jim's preference: all URLs in notification messages must be `[label](url)` Markdown links, never bare `https://...` strings. This applies to all three TO scripts (`usaw_to_reminder.py`, `usaw_to_change_watch.py`, `ncw_alerts.py`). The reminder and athlete alert scripts already used Markdown links; the change-watch script had a bare URL at the bottom — now fixed to `📄 [Schedule](url)`.
 

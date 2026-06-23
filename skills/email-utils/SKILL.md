@@ -63,7 +63,7 @@ ctx = resolver.resolve(email="someone@example.com")
 # → {"person_id": "person_ed_johnson", "circle_ids": ["circle_fortified_strength"], ...}
 
 # Or enrich a message dict in-place:
-msg = {"from": "Ed Johnson <ed@fortifiedstrength.org>", "subject": "Test"}
+msg = {"from": "Ed Johnson <coach@your-org.org>", "subject": "Test"}
 resolver.enrich_message(msg)
 # msg now has person_id, person_name, circle_ids, sender_is_known, priority_hint, style_hint
 ```
@@ -78,7 +78,7 @@ resolver.enrich_message(msg)
       "display_name": "Ed Johnson",
       "aliases": {
         "names": ["Ed Johnson"],
-        "emails": ["ed@fortifiedstrength.org", "coachedj@gmail.com"]
+        "emails": ["coach@your-org.org", "coach.alt@example.com"]
       },
       "circle_ids": ["circle_fortified_strength"]
     }

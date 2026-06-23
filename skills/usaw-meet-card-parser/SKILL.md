@@ -37,10 +37,10 @@ Parse USAW competition meet cards to extract athlete name, declared attempts, we
 
 | | |
 |---|---|
-| **Venue** | [Ed Robson Arena, 849 N Tejon St, Colorado Springs CO 80903](https://maps.google.com/?q=849+N+Tejon+St,+Colorado+Springs,+CO+80903) |
-| **Parking garage** | [110 E Dale St](https://maps.google.com/?q=110+E+Dale+St+Colorado+Springs+CO+80903) (attached) |
-| **Hotel** | [Hyatt Regency Colorado Springs, 502 N Nevada Ave](https://maps.google.com/?q=Hyatt+Regency+Colorado+Springs,+502+N+Nevada+Ave,+Colorado+Springs,+CO+80903) |
-| **Water/grocery** | [King Soopers, 315 N Nevada Ave](https://maps.google.com/?q=King+Soopers+315+N+Nevada+Ave+Colorado+Springs+CO) (on the route to Hyatt) |
+| **Venue** | [Venue Name, 123 Venue St, Venue City CO VENUE_ZIP](https://maps.google.com/?q=123\+Venue\+St,+Venue\+City,+CO+VENUE_ZIP) |
+| **Parking garage** | [110 E Dale St](https://maps.google.com/?q=110+E+Dale+St+Venue\+City+CO+VENUE_ZIP) (attached) |
+| **Hotel** | [Hotel Name Venue City, 456 Hotel Ave](https://maps.google.com/?q=Hotel+Name+Venue\+City,+502+N+Nevada+Ave,+Venue\+City,+CO+VENUE_ZIP) |
+| **Water/grocery** | [King Soopers, 315 N Nevada Ave](https://maps.google.com/?q=King+Soopers+315+N+Nevada+Ave+Venue\+City+CO) (on the route to Hotel Name) |
 | **Transport** | Kelly's SUV — both Jim and Kelly |
 | **Sessions end** | ~10 PM MT most days (Jun 20–27); Jun 28 ends ~4 PM |
 | **Water reminder** | Google Calendar popup at 9:30 PM each night (30 min before wrap) |
@@ -48,9 +48,9 @@ Parse USAW competition meet cards to extract athlete name, declared attempts, we
 
 | Resource | Link |
 |---|---|
-| 🏟️ Ed Robson Arena (venue) | https://maps.google.com/?q=849+N+Tejon+St,+Colorado+Springs,+CO+80903 |
-| 🏨 Hyatt Regency Colorado Springs | https://maps.google.com/?q=Hyatt+Regency+Colorado+Springs+502+N+Nevada+Ave |
-| 🛒 Nearest grocery (water/snacks) | https://maps.google.com/?q=grocery+store+near+849+N+Tejon+St+Colorado+Springs+CO |
+| 🏟️ Venue Name (venue) | https://maps.google.com/?q=123\+Venue\+St,+Venue\+City,+CO+VENUE_ZIP |
+| 🏨 Hotel Name Venue City | https://maps.google.com/?q=Hotel+Name+Venue\+City+502+N+Nevada+Ave |
+| 🛒 Nearest grocery (water/snacks) | https://maps.google.com/?q=grocery+store+near+123\+Venue\+St+Venue\+City+CO |
 | 🏆 USAW 2026 Nationals event page | https://www.usaweightlifting.org/2026-national-championships |
 | 📊 USAW lifting results / meet cards | https://www.iwf.sport/results/ |
 | 📋 Goodlift results database | https://goodlift.info |
@@ -209,14 +209,14 @@ Always include these for NCW 2026:
 
 ```python
 MAPS = {
-    "venue":   "https://maps.google.com/?q=849+N+Tejon+St,+Colorado+Springs,+CO+80903",
-    "hotel":   "https://maps.google.com/?q=Hilton+Garden+Inn+Colorado+Springs+Downtown",
-    "grocery": "https://maps.google.com/?q=King+Soopers+315+N+Nevada+Ave+Colorado+Springs",
-    "parking": "https://maps.google.com/?q=110+E+Dale+St+Colorado+Springs+CO+80903",
+    "venue":   "https://maps.google.com/?q=123\+Venue\+St,+Venue\+City,+CO+VENUE_ZIP",
+    "hotel":   "https://maps.google.com/?q=Hilton+Garden+Inn+Venue\+City+Downtown",
+    "grocery": "https://maps.google.com/?q=King+Soopers+315+N+Nevada+Ave+Venue\+City",
+    "parking": "https://maps.google.com/?q=110+E+Dale+St+Venue\+City+CO+VENUE_ZIP",
 }
 ```
 
-Parking garage entrance: 110 E Dale St (attached to Ed Robson Arena).
+Parking garage entrance: 110 E Dale St (attached to Venue Name).
 
 ## Pitfalls
 
