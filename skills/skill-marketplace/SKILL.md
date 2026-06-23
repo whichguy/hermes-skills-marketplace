@@ -14,7 +14,7 @@ metadata:
     config:
       - key: skill-marketplace.repo
         description: "GitHub repo for publishing (org/repo format)"
-        default: "fortifiedstrength/hermes-skills-marketplace"
+        default: "whichguy/hermes-skills-marketplace"
         prompt: "GitHub repo for skill publishing (org/repo)?"
       - key: skill-marketplace.default_license
         description: "Default license for new skills"
@@ -62,6 +62,25 @@ London without editing a single line.
 | Templates | `templates/*` | Output formats | `${HERMES_SKILL_DIR}/templates/` |
 | References | `references/*.md` | Bulky docs | `${HERMES_SKILL_DIR}/references/` |
 | SKILL.md body | Prose | Triggers + procedure + pitfalls | Loaded on demand |
+
+## Design Principle: Scripted Support First
+
+When building marketplace infrastructure or repeatable operations, prefer
+**scripts over agent-driven approaches**. The user explicitly wants scripted
+support maximized — cron jobs should be `no_agent=True` with script-only
+output, sync operations should be shell scripts, and validation should be
+automated Python that runs without an LLM in the loop.
+
+Rationale: scripts are deterministic, fast, cheap, and don't consume tokens.
+They run the same way every time. Agent loops are for reasoning, not for
+mechanical repetition.
+
+Apply this to:
+- Update checks → `check_updates.sh` (cron-safe, silent on no-op)
+- Skill syncing → `sync_skills.sh push/pull` (deterministic file copy + git)
+- Index generation → `generate_index.py` (scan dirs, write JSON)
+- CI validation → 5 Python scripts (exit codes, no LLM needed)
+- The only agent-driven part is authoring/editing SKILL.md content itself
 
 ## Procedure: Creating a Marketplace-Ready Skill
 
@@ -197,16 +216,95 @@ git commit -m "feat: add my-skill skill"
 
 **Completion criterion:** Skill is pushed to GitHub or a PR is opened.
 
-## Procedure: Installing a Skill from the Marketplace
+## Procedure: Connecting to the Marketplace (Setup)
+
+There are **three built-in Hermes mechanisms** for connecting an agent to the
+marketplace. Use the one that fits the situation.
+
+### Option A — Hermes Skills Hub Tap (for any Hermes agent, public discovery)
+
+This is the native marketplace flow. Other Hermes agents use this to discover
+and install your skills from GitHub.
 
 ```bash
-hermes skills tap add fortifiedstrength/hermes-skills-marketplace
-hermes skills browse
-hermes skills search <keyword>
-hermes skills inspect fortifiedstrength/<skill-name>
-hermes skills install fortifiedstrength/<skill-name>
-/skill <skill-name>
+# 1. Add the marketplace as a tap (one-time per agent)
+hermes skills tap add whichguy/hermes-skills-marketplace
+
+# 2. Browse/search for skills
+hermes skills browse                    # Shows all sources including this marketplace
+hermes skills search usaw               # Filter by keyword
+
+# 3. Install a skill (downloads from GitHub to ~/.hermes/skills/)
+hermes skills install whichguy/hermes-skills-marketplace/skills/<skill-name>
+
+# 4. Check for updates
+hermes skills check                     # Checks all installed hub skills
+hermes skills update                    # Updates outdated skills
 ```
+
+**How it works:** The Hermes Hub indexer calls the GitHub Contents API on the
+tap path (`skills/`), lists directories one level deep, and looks for
+`<dir>/SKILL.md` in each. That's why the marketplace uses a **flat structure**
+(`skills/<name>/SKILL.md`) — category subdirs would be invisible to the
+indexer. Categories are declared in `skills.sh.json` instead.
+
+**Prerequisites:**
+- Set `GITHUB_TOKEN` env var (or have `gh` CLI authenticated) to avoid
+  GitHub API rate limits (60 req/hr unauthenticated vs 5000/hr authenticated)
+- Community-sourced skills go through a security scan on install
+- If scan blocks a skill, use `hermes skills install --force <id>` (requires
+  the skill to not have a CRITICAL verdict) or use Option B below
+
+### Option B — external_dirs (for local clone, no security scan)
+
+If the marketplace repo is cloned locally (e.g., by the sync script), mount
+it directly as a skill source. No security scan, no rate limits.
+
+```bash
+# 1. Clone the marketplace repo
+git clone https://github.com/whichguy/hermes-skills-marketplace.git \
+  /opt/data/hermes-skills-marketplace
+
+# 2. Add to Hermes config
+hermes config set skills.external_dirs '["/opt/data/hermes-skills-marketplace/skills"]'
+
+# 3. Restart Hermes (or /reset)
+```
+
+Skills from the external dir appear alongside bundled skills. No install
+step needed — they're available immediately.
+
+### Option C — Sync Script (for the marketplace owner, bidirectional)
+
+The sync script copies skills between local `~/.hermes/skills/` and the
+marketplace GitHub repo. Best for the repo owner who wants to push changes.
+
+```bash
+# Push local skill changes to GitHub
+/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh push
+
+# Pull marketplace updates to local
+/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh pull
+
+# Check if in sync (cron-safe, silent on no-op)
+/opt/data/hermes-skills-marketplace/scripts/check_updates.sh
+
+# Show sync status
+/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh status
+```
+
+A cron job runs `check_updates.sh` every 6h and alerts when updates are
+available.
+
+### Which option to use?
+
+| Situation | Option |
+|-----------|--------|
+| Other agents discovering your skills | A (Skills Hub tap) |
+| Local development, no security scan | B (external_dirs) |
+| Pushing your local changes to GitHub | C (sync script push) |
+| Pulling marketplace updates to local | C (sync script pull) |
+| Automated periodic update check | C (cron + check_updates.sh) |
 
 ## Procedure: Retrofitting a Single Skill
 
@@ -247,6 +345,7 @@ When retrofitting a large library (50+ skills), automate the repetitive parts:
 - `references/frontmatter-schema.md` — Complete frontmatter field reference with examples
 - `references/claude-code-learnings.md` — Research from agentskills.io spec, Anthropic's skills repo, and community marketplaces
 - `references/validator-tuning.md` — CI validator architecture, false-positive patterns, advisory vs hard-fail rules, BUILTIN_ENV set
+- `references/github-repo-setup.md` — GitHub repo creation, git identity, sync script architecture, cron integration, custom vs bundled skill detection
 
 ## Common Pitfalls
 
@@ -313,48 +412,40 @@ The marketplace repo is on GitHub at `whichguy/hermes-skills-marketplace`.
 Scripts in `scripts/` handle all sync operations.
 
 ### Push local changes to GitHub
-
 ```bash
 /opt/data/hermes-skills-marketplace/scripts/sync_skills.sh push
 ```
 
-This copies all tracked custom skills from local `~/.hermes/skills/` to the
-marketplace repo, regenerates index.json, commits, and pushes to GitHub.
-
 ### Pull marketplace updates to local
-
 ```bash
 /opt/data/hermes-skills-marketplace/scripts/sync_skills.sh pull
 ```
 
-This pulls the latest from GitHub and copies any changed skills to local
-`~/.hermes/skills/`.
-
 ### Check for updates (cron-safe, silent on no-op)
-
 ```bash
 /opt/data/hermes-skills-marketplace/scripts/check_updates.sh
 ```
-
-Exits 0 silently if in sync. Exits 1 with a summary if updates are available.
-Designed for cron — only produces output when there's something to report.
+Exits 0 silently if in sync. Exits 1 with summary if updates available.
 
 ### Show sync status
-
 ```bash
 /opt/data/hermes-skills-marketplace/scripts/sync_skills.sh status
 ```
 
-Shows local vs remote SHA, commits behind/ahead, and skill count.
+13. **GitHub Actions workflow files need `workflow` scope on the token.**
+    `gh auth` with only `repo` scope can create repos and push code, but
+    `.github/workflows/*.yml` files are rejected: `refusing to allow an OAuth
+    App to create or update workflow without workflow scope`. Fix:
+    `gh auth refresh -h github.com -s workflow` (requires interactive device
+    code flow). Workaround: exclude workflow files from the initial commit,
+    add them after refreshing auth.
 
-### When to use each
-
-| Scenario | Command |
-|----------|---------|
-| You modified a skill locally | `sync_skills.sh push` |
-| Someone else updated the marketplace | `sync_skills.sh pull` |
-| Cron check for updates | `check_updates.sh` |
-| Before working on skills | `sync_skills.sh status` |
+14. **Hermes skills tap indexer may not immediately discover new repo
+    skills.** `hermes skills tap add` registers the repo, but
+    `hermes skills search` might not find skills from a freshly added tap
+    until the hub indexer crawls it. Use the sync scripts
+    (`sync_skills.sh pull`) for immediate skill installation instead of
+    waiting for hub indexing.
 
 ## Verification Checklist
 
@@ -374,3 +465,5 @@ Shows local vs remote SHA, commits behind/ahead, and skill count.
 - [ ] For bulk retrofits: `chmod u+w` on read-only bundled skills before writing
 - [ ] Validator BUILTIN_ENV set includes HERMES_HOME, HERMES_SESSION_ID, HERMES_SKILL_DIR, HERMES_GWS_BIN
 - [ ] Secret scanner excludes placeholder patterns (..., ***, YOUR_, <...>, EXAMPLE)
+- [ ] For GitHub push: `gh auth refresh -s workflow` before pushing workflow files
+- [ ] For cron setup: copy scripts to `~/.hermes/scripts/` and use `no_agent=True`
