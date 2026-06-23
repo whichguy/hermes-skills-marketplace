@@ -1,0 +1,525 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hermes Skills Marketplace",
+  "description": "Custom skills marketplace for Hermes Agent — config-code separation enforced",
+  "skills": [
+    {
+      "name": "apple-macos-apps",
+      "description": "macOS Apple app integrations: Apple Notes (memo), Reminders (remindctl), iMessage (imsg), and Find My (AppleScript + vision). All macOS-only, iCloud-synced.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "macos"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "apple-macos-apps.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/apple-macos-apps/SKILL.md"
+    },
+    {
+      "name": "bfl-api",
+      "description": "BFL (Black Forest Labs) API integration guide for FLUX models. Covers endpoints, pricing, polling pattern, webhooks, image input for editing, and rate limits for FLUX.2 and FLUX.1 families.",
+      "category": "creative",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "bfl-api.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/creative/bfl-api/SKILL.md"
+    },
+    {
+      "name": "computer-use",
+      "description": "Drive the user's desktop in the background — clicking, typing,\nscrolling, dragging — without stealing the cursor, keyboard focus,\nor switching virtual desktops / Spaces. Cross-platform: macOS,\nWindows",
+      "category": "software-development",
+      "version": "2.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "macos",
+        "windows",
+        "linux"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "computer-use.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/software-development/computer-use/SKILL.md"
+    },
+    {
+      "name": "cron-llm-review-house-style",
+      "description": "Convert script-only Hermes cron jobs into script→LLM-review→pretty-delivery pipelines so every scheduled message is evaluated for false alarms/actionable items and formatted in a consistent emoji+hype",
+      "category": "devops",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "cron-llm-review-house-style.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/devops/cron-llm-review-house-style/SKILL.md"
+    },
+    {
+      "name": "email-utils",
+      "description": "Shared utilities for email-processing cron precheck scripts: people resolution, episodic memory, cross-cron dedup, action quality logging, and TF-IDF topic clustering.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "email-utils.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/email-utils/SKILL.md"
+    },
+    {
+      "name": "flux-best-practices",
+      "description": "Comprehensive guide for BFL FLUX image generation models. Covers prompting, T2I, I2I, structured JSON, hex colors, typography, multi-reference editing, and model-specific best practices for FLUX.2 and",
+      "category": "creative",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "flux-best-practices.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/creative/flux-best-practices/SKILL.md"
+    },
+    {
+      "name": "hardware-repair-research",
+      "description": "Research consumer-hardware complaints, normal-vs-defect behavior, failure modes, replacement parts, compatibility, repair options, and next-step guidance for electronics/peripherals.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "hardware-repair-research.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/hardware-repair-research/SKILL.md"
+    },
+    {
+      "name": "hermes-config-git-backup",
+      "description": "Version-control a Hermes Agent setup to a private GitHub repo, secrets-safe.",
+      "category": "devops",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "hermes-config-git-backup.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/devops/hermes-config-git-backup/SKILL.md"
+    },
+    {
+      "name": "hermes-ecosystem-research",
+      "description": "Research the Hermes Agent community ecosystem to recommend setup enhancements, skills, and tools.",
+      "category": "software-development",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/software-development/hermes-ecosystem-research/SKILL.md"
+    },
+    {
+      "name": "hermes-email-gateway",
+      "description": "Configure, verify, and troubleshoot Hermes Gateway email platform via IMAP/SMTP.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "hermes-email-gateway.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/hermes-email-gateway/SKILL.md"
+    },
+    {
+      "name": "hermes-whatsapp-gateway",
+      "description": "Configure, pair, verify, and troubleshoot the Hermes Gateway WhatsApp platform (Baileys bridge).",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "hermes-whatsapp-gateway.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/hermes-whatsapp-gateway/SKILL.md"
+    },
+    {
+      "name": "home-assistant-smart-home-control",
+      "description": "Control and troubleshoot smart-home devices through Home Assistant (including Alexa-connected devices via HA) or directly via OpenHue CLI for Philips Hue.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "home-assistant-smart-home-control.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/home-assistant-smart-home-control/SKILL.md"
+    },
+    {
+      "name": "html-artifact",
+      "description": "Build self-contained HTML files to explain, plan, or review.",
+      "category": "creative",
+      "version": "1.0.0",
+      "author": "Anthropic (html-effectiveness gallery, MIT), adapted for Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "html-artifact.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/creative/html-artifact/SKILL.md"
+    },
+    {
+      "name": "live-event-status-updates",
+      "description": "Use when providing repeated live status updates for sports matches, public events, elections, awards, product launches, or other time-sensitive events where the user wants the current state, not a ful",
+      "category": "research",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "live-event-status-updates.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/research/live-event-status-updates/SKILL.md"
+    },
+    {
+      "name": "messaging-platform-formatting",
+      "description": "Format assistant responses for messaging-platform gateways such as Telegram, WhatsApp, Signal, Slack, Discord, and email; verify Hermes platform hints/formatters when behavior is unclear.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "messaging-platform-formatting.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/messaging-platform-formatting/SKILL.md"
+    },
+    {
+      "name": "personal-context-integration",
+      "description": "Privacy-first personal profile and relationship-graph integration for Hermes memory, local context files, and ambient cron jobs.",
+      "category": "productivity",
+      "version": "1.1.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "personal-context-integration.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/personal-context-integration/SKILL.md"
+    },
+    {
+      "name": "scheduled-research-briefs",
+      "description": "Design, run, and refine scheduled research/monitoring briefs that synthesize current information into concise blog-like recommendations instead of raw dumps.",
+      "category": "research",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "scheduled-research-briefs.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/research/scheduled-research-briefs/SKILL.md"
+    },
+    {
+      "name": "script-first-cron-design",
+      "description": "Use when creating, updating, auditing, or troubleshooting Hermes cron jobs so deterministic checks run as scripts and LLM tokens are reserved for synthesis or judgment.",
+      "category": "devops",
+      "version": "1.1.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "script-first-cron-design.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/devops/script-first-cron-design/SKILL.md"
+    },
+    {
+      "name": "self-healing-cron-watchdogs",
+      "description": "Three cooperating cron watchdogs that keep Hermes self-healing: trace diagnostic+auto-fix, npm dependency updates (3-day-behind), and pip dependency updates (3-day-behind).",
+      "category": "devops",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "self-healing-cron-watchdogs.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/devops/self-healing-cron-watchdogs/SKILL.md"
+    },
+    {
+      "name": "simplify-code",
+      "description": "Parallel 3-agent cleanup of recent code changes.",
+      "category": "software-development",
+      "version": "1.0.0",
+      "author": "Hermes Agent (inspired by Claude Code /simplify)",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "simplify-code.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/software-development/simplify-code/SKILL.md"
+    },
+    {
+      "name": "skill-marketplace",
+      "description": "Use when creating, validating, or publishing a Hermes skill for the marketplace. Enforces config-code separation, generates proper frontmatter, and guides publishing to a GitHub skill registry.",
+      "category": "software-development",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [
+        "terminal",
+        "file"
+      ],
+      "config_keys": [
+        "skill-marketplace.repo",
+        "skill-marketplace.default_license",
+        "skill-marketplace.default_author"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/software-development/skill-marketplace/SKILL.md"
+    },
+    {
+      "name": "skill-testing-harness",
+      "description": "Validate skills before unattended/cron use — reusable test + contract harness in skills/_testkit. Discovers tests/ dirs, runs pytest (via uv) or stdlib unittest, lints frontmatter/script-refs/secrets,",
+      "category": "software-development",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "skill-testing-harness.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/software-development/skill-testing-harness/SKILL.md"
+    },
+    {
+      "name": "usaw-meet-card-parser",
+      "description": "Parse USAW weightlifting meet cards: athlete name, attempts, totals, results. Includes Google Maps links for venue/hotel and USAW meet card deep-links.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Fortified Strength",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "usaw-meet-card-parser.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/usaw-meet-card-parser/SKILL.md"
+    },
+    {
+      "name": "usaw-to-schedule",
+      "description": "Read/update USA Weightlifting Technical Official (TO) sign-up & session schedule sheets.",
+      "category": "productivity",
+      "version": "1.0.0",
+      "author": "Hermes (for Jim Wiese)",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "usaw-to-schedule.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/usaw-to-schedule/SKILL.md"
+    },
+    {
+      "name": "versioning-hermes-home",
+      "description": "Safely version a live HERMES_HOME to git/GitHub: fail-closed gitignore, secret gating, runtime-state exclusion, watchdog backup cron.",
+      "category": "devops",
+      "version": "1.0.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "versioning-hermes-home.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/devops/versioning-hermes-home/SKILL.md"
+    },
+    {
+      "name": "worldcup-update-template",
+      "description": "Jim's preferred Telegram format for World Cup match-day updates: blockquote header-card layout (B3-b) with per-match duration lines. Times in Pacific when Jim is home, Mountain Time (MT) when travelin",
+      "category": "productivity",
+      "version": "1.1.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "worldcup-update-template.enabled"
+      ],
+      "required_env": [],
+      "required_credentials": [],
+      "path": "skills/productivity/worldcup-update-template/SKILL.md"
+    }
+  ]
+}
