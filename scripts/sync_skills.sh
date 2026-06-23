@@ -8,10 +8,9 @@
 #   ./sync_skills.sh check   — Check if local and remote are in sync (exit 0=in sync, 1=drift)
 #   ./sync_skills.sh status  — Show diff summary between local and marketplace
 #
-# Config (override via env vars):
-#   MARKETPLACE_REPO  — GitHub repo (default: whichguy/hermes-skills-marketplace)
-#   MARKETPLACE_DIR   — Local clone path (default: /opt/data/hermes-skills-marketplace)
-#   HERMES_SKILLS_DIR — Local Hermes skills (default: /opt/data/skills)
+# The marketplace uses a FLAT structure: skills/<name>/SKILL.md
+# Categories are declared in skills.sh.json groupings (not in directory structure)
+# so the Hermes Skills Hub indexer (one-level-deep scan) can discover all skills.
 #
 
 set -euo pipefail
@@ -50,36 +49,6 @@ SYNC_SKILLS=(
   worldcup-update-template
 )
 
-# Category mapping for marketplace directory structure
-declare -A CATEGORY_MAP=(
-  [apple-macos-apps]=productivity
-  [bfl-api]=creative
-  [computer-use]=software-development
-  [cron-llm-review-house-style]=devops
-  [email-utils]=productivity
-  [flux-best-practices]=creative
-  [hardware-repair-research]=productivity
-  [hermes-config-git-backup]=devops
-  [hermes-ecosystem-research]=software-development
-  [hermes-email-gateway]=productivity
-  [hermes-whatsapp-gateway]=productivity
-  [home-assistant-smart-home-control]=productivity
-  [html-artifact]=creative
-  [live-event-status-updates]=research
-  [messaging-platform-formatting]=productivity
-  [personal-context-integration]=productivity
-  [scheduled-research-briefs]=research
-  [script-first-cron-design]=devops
-  [self-healing-cron-watchdogs]=devops
-  [simplify-code]=software-development
-  [skill-marketplace]=software-development
-  [skill-testing-harness]=software-development
-  [usaw-meet-card-parser]=productivity
-  [usaw-to-schedule]=productivity
-  [versioning-hermes-home]=devops
-  [worldcup-update-template]=productivity
-)
-
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 
 ensure_repo() {
@@ -98,12 +67,10 @@ find_local_skill() {
   find "$HERMES_SKILLS_DIR" -name "SKILL.md" -not -path "*/.archive/*" 2>/dev/null | while read -r f; do
     local dir
     dir="$(dirname "$f")"
-    # Check if the directory name or frontmatter name matches
     if [ "$(basename "$dir")" = "$skill_name" ]; then
       echo "$dir"
       return
     fi
-    # Check frontmatter name
     local fm_name
     fm_name=$(grep -m1 "^name:" "$f" | sed 's/name: *//' | tr -d '"'"'" 2>/dev/null || true)
     if [ "$fm_name" = "$skill_name" ]; then
@@ -117,40 +84,39 @@ cmd_push() {
   ensure_repo
   cd "$MARKETPLACE_DIR"
   git pull --rebase --quiet 2>/dev/null || true
-  
+
   local changed=0
   for skill in "${SYNC_SKILLS[@]}"; do
-    local category="${CATEGORY_MAP[$skill]}"
     local local_path
     local_path=$(find_local_skill "$skill")
-    local target="skills/${category}/${skill}"
-    
+    local target="skills/${skill}"
+
     if [ -z "$local_path" ]; then
       log "SKIP: $skill not found locally"
       continue
     fi
-    
-    # Remove old and copy new
+
     rm -rf "$target"
     mkdir -p "$(dirname "$target")"
     cp -r "$local_path" "$target"
-    
-    # Check if anything changed
+
     if ! git diff --quiet -- "$target" 2>/dev/null; then
       git add "$target"
       changed=$((changed + 1))
       log "UPDATED: $skill → $target"
     fi
   done
-  
-  # Update index.json
+
+  # Regenerate index + catalog + skills.sh.json
   python3 scripts/generate_index.py --quiet 2>/dev/null || true
-  if ! git diff --quiet -- ".well-known/skills/index.json" 2>/dev/null; then
-    git add ".well-known/skills/index.json"
-    changed=$((changed + 1))
-    log "UPDATED: .well-known/skills/index.json"
-  fi
-  
+  for f in ".well-known/skills/index.json" "CATALOG.md" "skills.sh.json"; do
+    if ! git diff --quiet -- "$f" 2>/dev/null; then
+      git add "$f"
+      changed=$((changed + 1))
+      log "UPDATED: $f"
+    fi
+  done
+
   if [ "$changed" -gt 0 ]; then
     git commit -m "sync: ${changed} skill(s) updated from local ($(date -u +%Y-%m-%d))"
     git push origin "$(git branch --show-current)" 2>/dev/null || {
@@ -170,28 +136,26 @@ cmd_pull() {
     git fetch --quiet
     git reset --hard origin/$(git branch --show-current) --quiet
   }
-  
+
   local updated=0
   for skill in "${SYNC_SKILLS[@]}"; do
-    local category="${CATEGORY_MAP[$skill]}"
-    local source="skills/${category}/${skill}"
+    local source="skills/${skill}"
     local target
     target=$(find_local_skill "$skill")
-    
+
     if [ ! -d "$source" ]; then
       log "SKIP: $skill not in marketplace"
       continue
     fi
-    
+
     if [ -z "$target" ]; then
-      # Install to local skills dir under category
-      target="${HERMES_SKILLS_DIR}/${category}/${skill}"
+      # Install to local skills dir (flat, no category subdir)
+      target="${HERMES_SKILLS_DIR}/${skill}"
       mkdir -p "$(dirname "$target")"
       cp -r "$source" "$target"
       updated=$((updated + 1))
       log "INSTALLED: $skill → $target"
     else
-      # Compare and update if different
       if ! diff -rq "$source" "$target" >/dev/null 2>&1; then
         rm -rf "$target"
         cp -r "$source" "$target"
@@ -200,7 +164,7 @@ cmd_pull() {
       fi
     fi
   done
-  
+
   if [ "$updated" -gt 0 ]; then
     log "✅ Pulled $updated skill(s) from marketplace to local"
   else
@@ -212,11 +176,11 @@ cmd_check() {
   ensure_repo
   cd "$MARKETPLACE_DIR"
   git fetch --quiet 2>/dev/null || true
-  
+
   local local_sha remote_sha
   local_sha=$(git rev-parse HEAD)
   remote_sha=$(git rev-parse origin/$(git branch --show-current) 2>/dev/null || echo "")
-  
+
   if [ "$local_sha" = "$remote_sha" ]; then
     log "IN SYNC: local and remote match ($local_sha)"
     exit 0
@@ -231,16 +195,16 @@ cmd_status() {
   ensure_repo
   cd "$MARKETPLACE_DIR"
   git fetch --quiet 2>/dev/null || true
-  
+
   local local_sha remote_sha
   local_sha=$(git rev-parse --short HEAD)
   remote_sha=$(git rev-parse --short origin/$(git branch --show-current) 2>/dev/null || echo "unknown")
-  
+
   echo "Marketplace: $MARKETPLACE_REPO"
   echo "Local SHA:   $local_sha"
   echo "Remote SHA:  $remote_sha"
   echo ""
-  
+
   if [ "$local_sha" = "$remote_sha" ]; then
     echo "Status: IN SYNC ✅"
   else
@@ -252,13 +216,12 @@ cmd_status() {
     echo "Commits ahead of remote:"
     git log --oneline "origin/$(git branch --show-current)..HEAD" 2>/dev/null | head -10
   fi
-  
+
   echo ""
   echo "Skills tracked: ${#SYNC_SKILLS[@]}"
-  
-  # Count actual skill dirs
+
   local count
-  count=$(find skills/ -name "SKILL.md" 2>/dev/null | wc -l)
+  count=$(find skills/ -maxdepth 2 -name "SKILL.md" 2>/dev/null | wc -l)
   echo "Skills in marketplace: $count"
 }
 

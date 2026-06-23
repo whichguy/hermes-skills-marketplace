@@ -1,0 +1,66 @@
+{
+  "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+  "groupings": [
+    {
+      "title": "autonomous-ai-agents",
+      "skills": [
+        "hermes-ecosystem-research"
+      ]
+    },
+    {
+      "title": "creative",
+      "skills": [
+        "bfl-api",
+        "flux-best-practices",
+        "html-artifact"
+      ]
+    },
+    {
+      "title": "desktop",
+      "skills": [
+        "computer-use"
+      ]
+    },
+    {
+      "title": "devops",
+      "skills": [
+        "cron-llm-review-house-style",
+        "hermes-config-git-backup",
+        "script-first-cron-design",
+        "self-healing-cron-watchdogs",
+        "versioning-hermes-home"
+      ]
+    },
+    {
+      "title": "productivity",
+      "skills": [
+        "apple-macos-apps",
+        "email-utils",
+        "hardware-repair-research",
+        "hermes-email-gateway",
+        "hermes-whatsapp-gateway",
+        "home-assistant-smart-home-control",
+        "messaging-platform-formatting",
+        "personal-context-integration",
+        "usaw-meet-card-parser",
+        "usaw-to-schedule",
+        "worldcup-update-template"
+      ]
+    },
+    {
+      "title": "research",
+      "skills": [
+        "live-event-status-updates",
+        "scheduled-research-briefs"
+      ]
+    },
+    {
+      "title": "software-development",
+      "skills": [
+        "simplify-code",
+        "skill-marketplace",
+        "skill-testing-harness"
+      ]
+    }
+  ]
+}

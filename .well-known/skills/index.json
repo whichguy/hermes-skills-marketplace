@@ -19,7 +19,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/apple-macos-apps/SKILL.md"
+      "path": "skills/apple-macos-apps/SKILL.md"
     },
     {
       "name": "bfl-api",
@@ -39,12 +39,12 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/creative/bfl-api/SKILL.md"
+      "path": "skills/bfl-api/SKILL.md"
     },
     {
       "name": "computer-use",
       "description": "Drive the user's desktop in the background — clicking, typing,\nscrolling, dragging — without stealing the cursor, keyboard focus,\nor switching virtual desktops / Spaces. Cross-platform: macOS,\nWindows",
-      "category": "software-development",
+      "category": "desktop",
       "version": "2.0.0",
       "author": "Fortified Strength",
       "license": "MIT",
@@ -59,7 +59,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/software-development/computer-use/SKILL.md"
+      "path": "skills/computer-use/SKILL.md"
     },
     {
       "name": "cron-llm-review-house-style",
@@ -79,7 +79,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/devops/cron-llm-review-house-style/SKILL.md"
+      "path": "skills/cron-llm-review-house-style/SKILL.md"
     },
     {
       "name": "email-utils",
@@ -98,7 +98,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/email-utils/SKILL.md"
+      "path": "skills/email-utils/SKILL.md"
     },
     {
       "name": "flux-best-practices",
@@ -118,7 +118,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/creative/flux-best-practices/SKILL.md"
+      "path": "skills/flux-best-practices/SKILL.md"
     },
     {
       "name": "hardware-repair-research",
@@ -138,7 +138,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/hardware-repair-research/SKILL.md"
+      "path": "skills/hardware-repair-research/SKILL.md"
     },
     {
       "name": "hermes-config-git-backup",
@@ -157,12 +157,12 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/devops/hermes-config-git-backup/SKILL.md"
+      "path": "skills/hermes-config-git-backup/SKILL.md"
     },
     {
       "name": "hermes-ecosystem-research",
       "description": "Research the Hermes Agent community ecosystem to recommend setup enhancements, skills, and tools.",
-      "category": "software-development",
+      "category": "autonomous-ai-agents",
       "version": "1.0.0",
       "author": "Hermes Agent",
       "license": "MIT",
@@ -175,7 +175,7 @@
       "config_keys": [],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/software-development/hermes-ecosystem-research/SKILL.md"
+      "path": "skills/hermes-ecosystem-research/SKILL.md"
     },
     {
       "name": "hermes-email-gateway",
@@ -195,7 +195,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/hermes-email-gateway/SKILL.md"
+      "path": "skills/hermes-email-gateway/SKILL.md"
     },
     {
       "name": "hermes-whatsapp-gateway",
@@ -215,7 +215,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/hermes-whatsapp-gateway/SKILL.md"
+      "path": "skills/hermes-whatsapp-gateway/SKILL.md"
     },
     {
       "name": "home-assistant-smart-home-control",
@@ -235,7 +235,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/home-assistant-smart-home-control/SKILL.md"
+      "path": "skills/home-assistant-smart-home-control/SKILL.md"
     },
     {
       "name": "html-artifact",
@@ -255,7 +255,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/creative/html-artifact/SKILL.md"
+      "path": "skills/html-artifact/SKILL.md"
     },
     {
       "name": "live-event-status-updates",
@@ -275,7 +275,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/research/live-event-status-updates/SKILL.md"
+      "path": "skills/live-event-status-updates/SKILL.md"
     },
     {
       "name": "messaging-platform-formatting",
@@ -295,7 +295,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/messaging-platform-formatting/SKILL.md"
+      "path": "skills/messaging-platform-formatting/SKILL.md"
     },
     {
       "name": "personal-context-integration",
@@ -315,7 +315,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/personal-context-integration/SKILL.md"
+      "path": "skills/personal-context-integration/SKILL.md"
     },
     {
       "name": "scheduled-research-briefs",
@@ -335,7 +335,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/research/scheduled-research-briefs/SKILL.md"
+      "path": "skills/scheduled-research-briefs/SKILL.md"
     },
     {
       "name": "script-first-cron-design",
@@ -355,7 +355,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/devops/script-first-cron-design/SKILL.md"
+      "path": "skills/script-first-cron-design/SKILL.md"
     },
     {
       "name": "self-healing-cron-watchdogs",
@@ -375,7 +375,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/devops/self-healing-cron-watchdogs/SKILL.md"
+      "path": "skills/self-healing-cron-watchdogs/SKILL.md"
     },
     {
       "name": "simplify-code",
@@ -395,7 +395,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/software-development/simplify-code/SKILL.md"
+      "path": "skills/simplify-code/SKILL.md"
     },
     {
       "name": "skill-marketplace",
@@ -420,7 +420,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/software-development/skill-marketplace/SKILL.md"
+      "path": "skills/skill-marketplace/SKILL.md"
     },
     {
       "name": "skill-testing-harness",
@@ -440,7 +440,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/software-development/skill-testing-harness/SKILL.md"
+      "path": "skills/skill-testing-harness/SKILL.md"
     },
     {
       "name": "usaw-meet-card-parser",
@@ -460,7 +460,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/usaw-meet-card-parser/SKILL.md"
+      "path": "skills/usaw-meet-card-parser/SKILL.md"
     },
     {
       "name": "usaw-to-schedule",
@@ -480,7 +480,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/usaw-to-schedule/SKILL.md"
+      "path": "skills/usaw-to-schedule/SKILL.md"
     },
     {
       "name": "versioning-hermes-home",
@@ -499,7 +499,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/devops/versioning-hermes-home/SKILL.md"
+      "path": "skills/versioning-hermes-home/SKILL.md"
     },
     {
       "name": "worldcup-update-template",
@@ -519,7 +519,7 @@
       ],
       "required_env": [],
       "required_credentials": [],
-      "path": "skills/productivity/worldcup-update-template/SKILL.md"
+      "path": "skills/worldcup-update-template/SKILL.md"
     }
   ]
 }
