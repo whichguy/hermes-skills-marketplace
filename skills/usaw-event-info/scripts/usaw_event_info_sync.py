@@ -14,7 +14,6 @@ This script is intentionally conservative:
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -120,16 +119,14 @@ def run_test_suite() -> dict:
 
 
 def update_meet_ids_reference(events_data: dict) -> bool:
-    """Rewrite the Sport80 meet IDs reference file if meet IDs changed."""
-    reference_path = SKILL_DIR / "references" / "usaw-sport80-meet-ids.md"
-    # TODO: implement diff-based update if needed; currently reports only
+    """Check if Sport80 meet IDs changed. Returns True if reference file updated."""
+    # Placeholder — implement if meet ID drift becomes a problem
     return False
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--notify", action="store_true", help="Notify on changes")
-    parser.add_argument("--dry-run", action="store_true", help="Do not write snapshot")
+    parser.add_argument("--dry-run", action="store_true", help="Skip writing snapshot")
     args = parser.parse_args()
 
     snapshot = load_snapshot()
@@ -190,11 +187,8 @@ def main():
     summary = "\n".join(summary_lines)
     print(summary)
 
-    if args.notify and (all_changes or errors or test_result["returncode"] != 0):
-        # The cron job's deliver setting will send the stdout; this branch is
-        # for any additional notification logic if needed in the future.
-        pass
-
+    # Summary is printed to stdout; cron delivery handles notification.
+    # Exit code: 0 = clean, 1 = errors or test failures
     return 0 if not errors and test_result["returncode"] == 0 else 1
 
 

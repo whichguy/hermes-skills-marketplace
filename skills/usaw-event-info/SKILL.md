@@ -424,6 +424,29 @@ uv run --with pymupdf --with google-api-python-client --with google-auth-oauthli
 - `references/usaw-sport80-meet-ids.md` — all confirmed 2026 Sport80 meet IDs (25 divisions across 6 events)
 - `references/usaw-results-folder-ids.md` — all confirmed Google Drive folder IDs (2024–2026)
 
+## Daily Sync Cron
+
+`scripts/usaw_event_info_sync.py` — re-runs the extractor daily on all 2026 event pages, compares to the previous snapshot, runs the test suite, and reports any new/changed info.
+
+```bash
+# Manual dry run
+uv run --with beautifulsoup4 --with requests --with rapidfuzz \
+  python scripts/usaw_event_info_sync.py --dry-run
+
+# Run and update snapshot (used by cron)
+uv run --with beautifulsoup4 --with requests --with rapidfuzz \
+  python scripts/usaw_event_info_sync.py
+```
+
+**Cron job:** `usaw-event-info-sync` runs daily at 4:00 a.m. PT. It is a
+script-only cron (`no_agent: true`) and stays silent when no changes are found.
+
+**What it monitors:**
+- Event title, dates, venue, status
+- New/removed info types
+- New URLs added to the event page
+- Test suite pass/fail status
+
 ## USAW Event Information Schema
 
 For the **persistent schema** behind this skill — the metadata fields, competition lifecycle, age groups, bodyweight categories, scoring systems, and historical synonyms — see the wiki page `[[usaw-event-info-schema]]`.

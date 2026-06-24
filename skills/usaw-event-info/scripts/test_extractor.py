@@ -318,8 +318,7 @@ def main():
     
     passed = 0
     failed = 0
-    skipped = 0
-    
+
     print(f"🧪 USAW Event Extractor Test Suite")
     print(f"   {len(all_tests)} tests ({args.year})\n")
     
@@ -350,7 +349,7 @@ def main():
             failed += 1
     
     print(f"\n{'='*60}")
-    print(f"Results: {passed} passed, {failed} failed, {skipped} skipped ({passed+failed+skipped} total)")
+    print(f"Results: {passed} passed, {failed} failed ({passed+failed} total)")
     
     if failed > 0:
         sys.exit(1)

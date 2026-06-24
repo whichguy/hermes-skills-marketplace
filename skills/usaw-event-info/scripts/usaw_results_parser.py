@@ -274,6 +274,8 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
     if len(nums) >= 2:
         athlete["bodyweight"] = nums[0]
         athlete["age"] = int(nums[1]) if nums[1] == int(nums[1]) else nums[1]
+    else:
+        return athlete  # Insufficient data — return partial record
     
     # Snatch attempts (3 values after age)
     if len(nums) >= 5:
@@ -433,9 +435,16 @@ def parse_start_list(doc: fitz.Document) -> dict:
 # ──────────────────────────────────────────────────────────────────────
 
 def download_drive_file(file_id: str, output_path: str, account: str = "personal"):
-    """Download a file from Google Drive using the google_api.py helper."""
+    """Download a file from Google Drive via google_api.py helper."""
     import subprocess, os
-    gapi_script = os.path.expanduser("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py")
+    # Resolve google_api.py from productivity skill or fallback
+    candidates = [
+        os.path.expanduser("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"),
+        os.path.expanduser("/opt/data/skills/productivity/google-workspace/scripts/google_api.py"),
+    ]
+    gapi_script = next((p for p in candidates if os.path.exists(p)), None)
+    if not gapi_script:
+        raise FileNotFoundError("google_api.py not found — install google-workspace skill")
     cmd = [
         "uv", "run", "--quiet",
         "--with", "google-api-python-client",
@@ -453,9 +462,15 @@ def download_drive_file(file_id: str, output_path: str, account: str = "personal
 
 
 def list_drive_folder(folder_id: str, account: str = "personal"):
-    """Search for PDF files related to USAW results."""
+    """List PDF files in a Google Drive results folder."""
     import subprocess, json, os
-    gapi_script = os.path.expanduser("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py")
+    candidates = [
+        os.path.expanduser("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"),
+        os.path.expanduser("/opt/data/skills/productivity/google-workspace/scripts/google_api.py"),
+    ]
+    gapi_script = next((p for p in candidates if os.path.exists(p)), None)
+    if not gapi_script:
+        raise FileNotFoundError("google_api.py not found — install google-workspace skill")
     cmd = [
         "uv", "run", "--quiet",
         "--with", "google-api-python-client",

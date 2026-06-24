@@ -170,7 +170,7 @@ INFO_TYPES = {
     "media_credentials": {
         "aliases": ["media credential", "media", "background check"],
         "url_patterns": [r"docs\.google\.com/forms.*media", r"quickapp\.pro",
-                         r"docs\.google\.com/forms/d/1fnfSaa"],
+                         r"docs\.google\.com/forms/d/[a-zA-Z0-9_-]{20,}"],
         "category": "media",
         "description": "Media credential application + background check",
         "header_priority": True,
