@@ -644,17 +644,21 @@ def classify_sport80_url(url: str) -> dict:
     return info
 
 
-def extract_event_page(url: str) -> dict:
-    """Full extraction pipeline: fetch → parse → classify → structure."""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
+def extract_event_page(url: str, html: str | None = None) -> dict:
+    """Full extraction pipeline: fetch → parse → classify → structure.
+    
+    If html is provided, skip the network fetch (for offline/mock tests).
+    """
+    if html is None:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        resp = requests.get(url, headers=headers, timeout=30)
+        resp.raise_for_status()
+        html = resp.text
 
-    resp = requests.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
-
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
 
     # Extract structured link sections
     sections = extract_all_links(soup)

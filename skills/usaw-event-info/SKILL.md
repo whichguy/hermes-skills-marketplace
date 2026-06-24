@@ -378,11 +378,27 @@ See `references/usaw-event-page-layouts.md` for the full DOM layout reference
 
 ## Test Suite
 
+### Live tests (network required)
+
 `scripts/test_extractor.py` — 11 tests across 2026 (6 events) + 2025 (5 events).
 
 ```bash
 uv run --with beautifulsoup4 --with requests --with rapidfuzz \
   python scripts/test_extractor.py -v
+```
+
+### Mock tests (offline, <1 second)
+
+`scripts/test_extractor_mock.py` — same 11 tests using saved HTML fixtures
+(`tests/fixtures/*.html`). No network dependency.
+
+```bash
+# Run offline tests
+python scripts/test_extractor_mock.py -v
+
+# Re-fetch fixtures from live pages (when event pages change)
+uv run --with beautifulsoup4 --with requests --with rapidfuzz \
+  python scripts/test_extractor_mock.py --refresh
 ```
 
 Tests validate: required info types per event, zero unclassified, title/dates/venue
