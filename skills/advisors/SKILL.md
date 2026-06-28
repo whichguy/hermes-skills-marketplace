@@ -191,48 +191,40 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         print(f"{'✅' if rc == 0 else '❌'} {role} ({model}): {elapsed:.1f}s")
 ```
 
-#### Step 4 — Read the output files and synthesize
+#### Step 4 — Synthesize (dispatch to GLM, not in main context)
 
-**You are the synthesizer.** Read all N output files and reason about them
-directly — find agreements, disagreements, pick the strongest answer. This is
-better than coding synthesis in Python because you can apply judgment.
-
-```python
-import os
-for _, fname, role in seats:
-    path = f"/tmp/advisors/{fname}"
-    if os.path.exists(path):
-        print(f"\n{'='*50}")
-        print(f"{role}")
-        print(f"{'='*50}")
-        print(open(path).read()[:500])
-```
-
-Or dispatch one more `prompt-model` call with all responses for a structured
-synthesis:
+**Do not read the review files into your main context** — that pollutes the
+running conversation with 10K+ chars per review. Instead, dispatch the
+synthesis to a cloud model via `prompt_model.py`. The model reads the files
+from disk and writes the synthesis to a file.
 
 ```python
-responses = []
-for _, fname, role in seats:
-    path = f"/tmp/advisors/{fname}"
-    if os.path.exists(path):
-        responses.append(f"### {role}\n{open(path).read()}")
+import subprocess, sys
 
+SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
+OUTDIR = "/tmp/advisors"
+
+# Build the synthesis prompt — pass file paths, not file contents
+review_files = " ".join(f"- {OUTDIR}/{fname}" for _, fname, _ in seats)
 synthesis_prompt = (
-    "You are a consensus synthesizer. Review these advisor responses and produce "
-    "a final answer.\n\n"
-    f"QUESTION: {QUESTION}\n\n"
-    + "\n\n".join(responses) +
-    "\n\nSynthesize: agreements, disagreements, final answer, confidence, caveats. "
+    f"Read these review files and synthesize a consensus: {review_files}. "
+    f"The original question was: {QUESTION}. "
+    "Produce: agreements, disagreements, final answer, confidence, caveats. "
     "Do NOT split the difference — pick the strongest answer and justify it."
 )
 
 subprocess.run([sys.executable, SCRIPT,
-    "-m", "deepseek-v4-pro:cloud",
+    "-m", "glm-5.2:cloud",
     "-p", synthesis_prompt,
-    "-o", "/tmp/advisors/synthesis.md"
+    "-t", "file",
+    "-o", f"{OUTDIR}/synthesis.md"
 ], timeout=120)
 ```
+
+**Why GLM for synthesis:** It's a generalist that reads all perspectives
+without bias toward any single panel member's view. Do NOT use a panel member
+model for synthesis (self-bias — see Pitfalls). The synthesis file is small
+(~1-2K chars) — read that into your context to report to the user.
 
 #### Step 5 — Report to user
 
@@ -477,53 +469,51 @@ for meta_file, role in meta_seats:
         print(open(path).read())
 ```
 
-#### Step 4 — Final Synthesis (incorporate adversarial findings)
+#### Step 4 — Final Synthesis (dispatch to GLM, not in main context)
 
-This is the key step that makes the adversarial round worthwhile. Read the
-consensus + all meta-reviews and produce the final answer.
-
-**You are the final synthesizer.** Apply this decision tree to each meta-review:
-
-| Meta-review finding | Action | Confidence impact |
-|---|---|---|
-| "NO SPECIFIC ERROR FOUND" | Consensus stands as-is | ↑ increases confidence |
-| Specific factual error flagged, verifiable | **Correct the consensus** — quote the error, cite the correction | ↑ if corrected cleanly, ↓ if correction is debatable |
-| Specific factual error flagged, but wrong | Note the flag, explain why it's not actually an error, keep consensus | → neutral (false positive) |
-| Generic critique ("could be more comprehensive") | **Discard** — the prompt said no generic criticism | → neutral (noise) |
-| Meta-reviewers disagree on whether an error exists | Note the split. Lean toward consensus unless the flagged error is concrete and verifiable. | ↓ slightly (signals uncertainty) |
-
-Write the final synthesis to `/tmp/advisors/final.md`:
+This is the key step that makes the adversarial round worthwhile. Dispatch
+the final synthesis to GLM — do not read the consensus + meta-reviews into
+your main context. GLM reads all files from disk and produces the final answer.
 
 ```python
-# After reading all meta-reviews, write final synthesis
-final = """## Final Answer
+import subprocess, sys
 
-[Your recommendation, incorporating corrections from the adversarial round]
+SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
+OUTDIR = "/tmp/advisors"
 
-### Round 1 Consensus
-[Summary of the 3-model consensus from round 1]
+final_prompt = (
+    "You are the final synthesizer. Read the consensus and all meta-reviews, "
+    f"then produce the final answer. Files:\n"
+    f"- {OUTDIR}/consensus.md (the round 1 consensus)\n"
+    f"- {OUTDIR}/meta-1-reasoner.md (DeepSeek adversarial meta-review)\n"
+    f"- {OUTDIR}/meta-2-coder.md (Kimi adversarial meta-review)\n"
+    f"- {OUTDIR}/meta-3-qwen.md (Qwen adversarial meta-review)\n\n"
+    "Apply this decision tree to each meta-review:\n"
+    "- NO SPECIFIC ERROR FOUND → consensus stands, confidence increases\n"
+    "- Specific factual error, verifiable → correct the consensus\n"
+    "- Specific factual error, but wrong → note and dismiss (false positive)\n"
+    "- Generic critique → discard (the prompt said no generic criticism)\n"
+    "- Meta-reviewers disagree → note the split, lean toward consensus\n\n"
+    "Write: final answer, corrections applied, confidence level, open questions.\n"
+    "Do NOT rubber-stamp the consensus — if a meta-review found a real error, "
+    "the final answer MUST differ from the consensus on that point."
+)
 
-### Round 2 Adversarial Findings
-[For each seat: what they flagged or NO SPECIFIC ERROR FOUND]
-
-### Corrections Applied
-[List any corrections made based on verified factual errors]
-
-### Confidence
-[High / Medium / Low — and why, based on the adversarial round]
-
-### Open Questions
-[Remaining unknowns after both rounds]
-"""
-with open(f"{OUTDIR}/final.md", 'w') as f:
-    f.write(final)
+subprocess.run([sys.executable, SCRIPT,
+    "-m", "glm-5.2:cloud",
+    "-p", final_prompt,
+    "-t", "file",
+    "-o", f"{OUTDIR}/final.md"
+], timeout=120)
 ```
 
-**Critical:** Do not just rubber-stamp the consensus. If a meta-review flags a
-real error, the final answer MUST differ from the consensus on that point. If
-all meta-reviews say "NO SPECIFIC ERROR FOUND," the final answer matches the
-consensus with higher confidence. The value of Pattern 5 is entirely in this
-step — if you skip it, the adversarial round was wasted tokens.
+**Critical:** The final synthesis MUST differ from the consensus if any
+meta-review found a verified error. If all meta-reviews say "NO SPECIFIC
+ERROR FOUND," the final answer matches the consensus with higher confidence.
+The value of Pattern 5 is entirely in this step — if you skip it, the
+adversarial round was wasted tokens.
+
+Read only `final.md` (small, ~1-2K chars) into your context to report to the user.
 
 #### Step 5 — Report to user
 
@@ -571,10 +561,11 @@ Based on DeepSeek V4 Pro review (2026-06-28), incorporating YAGNI and KISS:
 4. **Fixed 2 rounds, no loop** — LLMs share training data; Delphi-style
    convergence loops show diminishing returns by round 2. Two adversarial
    rounds > four convergence rounds for LLMs.
-5. **Controller does final synthesis (Step 4)** — the orchestrating model reads
-   meta-reviews, applies the decision tree, and produces the final answer. No
-   4th model needed (avoids the "consensus model as panel member" bias pitfall).
-   This step is mandatory — skipping it wastes the adversarial round.
+5. **GLM does synthesis (Step 4)** — dispatch synthesis to GLM via
+   `prompt_model.py`, not in the controller's main context. GLM is a
+   generalist, not a panel member, so no self-bias. Reading 10K+ chars of
+   reviews into the main context pollutes the running conversation —
+   dispatch out and read only the small synthesis file (~1-2K chars) back.
 6. **Opt-in, not default** — Pattern 1 is sufficient 90% of the time. This
    pattern is for the 10% where being wrong is expensive.
 7. **DeepSeek + Kimi + Qwen panel** — reasoner + code-focused + local lens.
@@ -630,15 +621,31 @@ Two parallel rounds > four sequential rounds for LLM-based review.
 Same as Pattern 1 (Advisors). Dispatch N models with the same question.
 Each gets the raw question — no draft, no prior answer.
 
-#### Round 2 — Consolidate
+#### Round 2 — Consolidate (dispatch to GLM)
 
-You (the controller) read all N responses and synthesize:
-- Agreements (all models agree)
-- Disagreements (models differ — note which and why)
-- Gaps (something no model addressed)
-- Preliminary recommendation
+Dispatch the consolidation to GLM — do not read all N responses into your
+main context. GLM reads the files from disk and writes the synthesis:
 
-Write the synthesis to a file for Round 3.
+```python
+import subprocess, sys
+
+SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
+OUTDIR = "/tmp/advisors"
+
+review_files = " ".join(f"- {OUTDIR}/{fname}" for _, fname, _ in seats)
+consolidate_prompt = (
+    f"Read these review files and synthesize a consensus: {review_files}. "
+    "Produce: agreements, disagreements, gaps, preliminary recommendation. "
+    "Do NOT split the difference — pick the strongest answer and justify it."
+)
+
+subprocess.run([sys.executable, SCRIPT,
+    "-m", "glm-5.2:cloud",
+    "-p", consolidate_prompt,
+    "-t", "file",
+    "-o", f"{OUTDIR}/consensus.md"
+], timeout=120)
+```
 
 #### Round 3 — Parallel Convergent
 
@@ -653,13 +660,31 @@ specific factual error, say "NO SPECIFIC ERROR FOUND" and do not generate
 generic criticism.
 ```
 
-#### Round 4 — Final Synthesis
+#### Round 4 — Final Synthesis (dispatch to GLM)
 
-Apply the decision tree from Pattern 5 Step 4:
-- "NO ERROR" → consensus stands, confidence ↑
-- Verified error → correct it
-- False positive → dismiss
-- Generic critique → discard
+Same as Pattern 5 Step 4 — dispatch to GLM, not in main context. GLM reads
+`consensus.md` + all meta-review files and produces the final answer:
+
+```python
+final_prompt = (
+    "You are the final synthesizer. Read the consensus and all meta-reviews, "
+    f"then produce the final answer. Files:\n"
+    f"- {OUTDIR}/consensus.md\n"
+    f"- {OUTDIR}/meta-1-reasoner.md\n"
+    f"- {OUTDIR}/meta-2-coder.md\n"
+    f"- {OUTDIR}/meta-3-qwen.md\n\n"
+    "Decision tree: NO ERROR → keep, verified error → correct, "
+    "false positive → dismiss, generic → discard.\n"
+    "Write: final answer, corrections, confidence, open questions."
+)
+
+subprocess.run([sys.executable, SCRIPT,
+    "-m", "glm-5.2:cloud",
+    "-p", final_prompt,
+    "-t", "file",
+    "-o", f"{OUTDIR}/final.md"
+], timeout=120)
+```
 
 ### Real Run
 
@@ -745,6 +770,24 @@ when there's a domain-specific reason (e.g., `execute_code` 5-min cap).
 
 This is the same principle as the `ask` skill's config-deference rule: skills
 should NOT impose their own limits when Hermes already has a config key for it.
+
+### Do not read review files into main context — dispatch synthesis to GLM
+
+Every synthesis step (Pattern 1 Step 4, Pattern 5 Step 4, Pattern 6 Rounds 2+4)
+must be dispatched to GLM via `prompt_model.py -t file`. Do NOT read the raw
+review files into your main context. Each review is 5-15K chars — loading 3-6
+of them pollutes the running conversation with 30-90K chars that are never
+useful again after synthesis.
+
+**Wrong:** Read all review files into context, reason about them, write
+synthesis inline.
+
+**Right:** Dispatch to GLM with file paths + `-t file`. GLM reads files from
+disk, writes synthesis to a file. You read only the small synthesis file
+(~1-2K chars) into your context to report to the user.
+
+The synthesis model is GLM (not a panel member) to avoid self-bias. See the
+"Consensus model as a panel member" pitfall below.
 
 ### Non-English models (glm-5.2:cloud)
 
@@ -1081,12 +1124,12 @@ not covered by `dev`.
 # Primitive
 python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
 
-# Pattern 1: Advisors (3 parallel + synthesis) — most decisions
+# Pattern 1: Advisors (3 parallel + GLM synthesis) — most decisions
 1. Show dispatch plan
 2. Dispatch N prompt-model calls in parallel (execute_code + concurrent.futures)
-3. Read output files
-4. Synthesize yourself OR dispatch one more prompt-model with all responses
-5. Report: agreements, disagreements, final answer, caveats
+3. Do NOT read review files into main context
+4. Dispatch synthesis to GLM: prompt_model.py -m glm-5.2:cloud -t file -o synthesis.md
+5. Read only synthesis.md (~1-2K chars) into context, report to user
 
 # Pattern 2: Sequential Review Chain — cumulative expertise
 1. Dispatch model A → read output
@@ -1103,20 +1146,18 @@ python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
 python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
 
 # Pattern 5: Adversarial Meta-Review (opt-in, high-stakes only)
-1. Run Pattern 1 above, save consensus to file
+1. Run Pattern 1 above, save consensus to file (GLM synthesis)
 2. Dispatch same panel with hostile-auditor prompt: "find the specific factual
    error in this consensus, or say NO SPECIFIC ERROR FOUND"
-3. Read meta-reviews
-4. Final synthesis: apply decision tree (NO ERROR → keep, verified error → correct,
-   false positive → dismiss, generic → discard). Write final.md. MUST differ
-   from consensus if real errors found.
-5. Report both rounds: round 1 positions + round 2 findings + corrections + confidence
+3. Do NOT read meta-reviews into main context
+4. Dispatch final synthesis to GLM: prompt_model.py -m glm-5.2:cloud -t file -o final.md
+5. Read only final.md into context, report to user
 
 # Pattern 6: 4-Round Deliberation (design/architecture decisions)
 1. Round 1: Parallel divergent — N models, same question, independent answers
-2. Round 2: Consolidate — synthesize agreements, disagreements, gaps
+2. Round 2: Consolidate — dispatch to GLM (not in main context)
 3. Round 3: Parallel convergent — same panel, hostile-auditor framing on synthesis
-4. Round 4: Final synthesis — incorporate corrections, produce final answer
+4. Round 4: Final synthesis — dispatch to GLM, read only final.md into context
 
 # Pattern 7: Iterative Plan Refinement — multi-version review
 1. Write plan v1 → dispatch broad 3-seat panel → patch → v2
