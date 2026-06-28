@@ -6,7 +6,7 @@ description: >
   multi-model consensus (advisors), iterative refinement, A/B comparison,
   sequential review chains. Each call is a full Hermes agent with tools,
   skills, and multi-turn reasoning. No delegate_task, no gateway-restart risk.
-version: 3.2.0
+version: 3.3.0
 author: agent
 metadata:
   hermes:
@@ -1041,6 +1041,17 @@ r = subprocess.run(cmd, capture_output=True, text=True)
 This matters for the `ask` skill's session memory feature — it reads the
 session ID from stderr to enable conversational follow-up queries.
 
+### 3-seat panels catch more than 2-seat panels
+
+In the v6 SDLC state machine quality review (2026-06-28), a 3-seat panel
+(DeepSeek + Kimi + GLM) found 14 issues total. GLM caught 6 issues that
+DeepSeek and Kimi both missed — including thinking levels, toolsets, pytest
+flag conflicts, and regex bugs. A 2-seat panel would have shipped with 6 bugs.
+
+**Rule:** For code review and quality assurance, use 3 seats minimum. The
+marginal cost of the 3rd seat (~$0.02) is negligible compared to shipping
+with bugs. For simple lookups or yes/no questions, 1-2 seats is fine.
+
 ### Consensus model as a panel member
 
 If the synthesis model also answered independently, it's biased toward its own
@@ -1172,3 +1183,4 @@ python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
 - `references/` — Real-run logs (historical, from council v1 and advisors v2)
 - `references/real-run-v6-state-machine-design-2026-06-28.md` — **Pattern 7 in action:** 3-round iterative plan refinement for the v6 SDLC state machine (45-iteration scaling). 7 advisor calls across 3 rounds (broad → targeted → features). Key learnings: split recommendation is a strong signal, targeted verification saves cost, integrate don't build standalone, 45 iterations changes everything.
 - `references/adversarial-self-review-2026-06-28.md` — Live test: Pattern 5 reviewing the skill that defines Pattern 5. Validates the adversarial round catches real controller synthesis errors.
+- `references/real-run-adversarial-meta-review-2026-06-28.md` — **Pattern 5 in action:** SQLite vs DuckDB (50M rows, embedded analytics). Round 2 caught 2 real reasoning errors in the consensus (misleading VM overhead attribution, overgeneralized full-row-scan claim). Neither changed the recommendation, both refined the reasoning. Qwen returned NO SPECIFIC ERROR FOUND (escape hatch works).
