@@ -71,7 +71,6 @@ python3 prompt_model.py -m kimi-k2.7-code:cloud \
     -p "Find security issues in auth.py" \
     -t file,web,terminal \
     -s github-code-review \
-    --max-turns 8 \
     -o /tmp/review-kimi.md
 
 # Pipe context via stdin
@@ -173,13 +172,12 @@ seats = [
 QUESTION = "Should we use PostgreSQL or MongoDB? ACID required, ~100K rows."
 CONTEXT = open("/opt/data/wiki/design.md").read()
 TOOLSETS = "file,web"
-MAX_TURNS = 5
 
 def dispatch(model, outfile, role):
     cmd = [sys.executable, SCRIPT,
         "-m", model, "-p", QUESTION,
         "--context", CONTEXT,
-        "-t", TOOLSETS, "--max-turns", str(MAX_TURNS),
+        "-t", TOOLSETS,
         "-o", f"{OUTDIR}/{outfile}"]
     start = time.time()
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -444,7 +442,6 @@ def dispatch_meta(model, review_file, meta_file, role):
         "-m", model,
         "-p", "Review the consensus below as a hostile auditor. Find the most dangerous factual error, or say NO SPECIFIC ERROR FOUND.",
         "-c", ctx_file,
-        "--max-turns", "3",
         "-o", f"{OUTDIR}/{meta_file}"]
     start = time.time()
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
@@ -738,6 +735,17 @@ depth. Go back to the design, don't add a 4th review round.
 
 ## Pitfalls
 
+### Config deference: do not override Hermes config defaults
+
+The `--max-turns` flag defaults to `None` in `prompt_model.py`, which means
+Hermes config `agent.max_turns` (currently 120) is the source of truth. Do
+NOT hardcode `--max-turns` in advisor dispatches unless the user explicitly
+requests a specific value. The same applies to `--timeout` — only override
+when there's a domain-specific reason (e.g., `execute_code` 5-min cap).
+
+This is the same principle as the `ask` skill's config-deference rule: skills
+should NOT impose their own limits when Hermes already has a config key for it.
+
 ### Non-English models (glm-5.2:cloud)
 
 The script auto-appends "respond in English only" for known non-English models.
@@ -755,9 +763,11 @@ to stderr and exits with code 1. Check the file exists before reading.
 
 ### Token limits
 
-Use `--max-turns` to cap the agent loop. Default 5 is good for most tasks.
-For complex file-reading investigations, increase to 8-10. For quick
-questions, reduce to 2-3.
+The default `--max-turns` is `None`, which means Hermes config `agent.max_turns`
+is the source of truth (currently 120). Do not override `--max-turns` in
+advisor dispatches unless the user explicitly requests a specific value.
+The Hermes config already sets a sensible limit — hardcoding a lower value
+in the advisors skill silently caps every call.
 
 ### Concurrent subprocess limits
 
@@ -807,7 +817,7 @@ execute_code(code=f"""
 import subprocess, sys
 subprocess.run([sys.executable, SCRIPT, "-m", "deepseek-v4-pro:cloud",
     "-p", "Review the plan...", "-t", "file,terminal",
-    "--max-turns", "15", "--timeout", "600",
+    "--timeout", "600",
     "-o", "/tmp/review.md"], timeout=600)
 """)
 
@@ -817,7 +827,7 @@ terminal(
             '-m deepseek-v4-pro:cloud '
             '-p "Review the plan at /path/to/plan.md against source files. '
             'Update the plan with any fixes found." '
-            '-t file,terminal --max-turns 15 --timeout 600 '
+            '-t file,terminal --timeout 600 '
             '-o /tmp/review.md',
     background=True,
     notify_on_complete=True,
@@ -826,16 +836,18 @@ terminal(
 ```
 
 **Threshold:** Use `terminal(background=true)` for any advisor dispatch with
-`--max-turns >= 10` or `--timeout >= 300`. For quick dispatches (--max-turns <= 5,
---timeout <= 120), `execute_code` is fine.
+`--timeout >= 300`. For quick dispatches (`--timeout <= 120`),
+`execute_code` is fine. The `--max-turns` threshold no longer applies
+because we don't override it — Hermes config is the source of truth.
 
 ### Local models may time out in agent loops
 
 Local models (qwen3.6:35b-a3b, qwen3-coder-next:q4_K_M) are fast for single
 inference but slow for multi-turn agent loops. Each tool call adds 0.5-3s of
 model latency. A 5-turn agent loop on a local model can take 2-5 minutes vs
-30-60s on cloud models. For the "Local Lens" seat, set `--max-turns 2` to
-keep it fast, or skip it entirely for time-sensitive panels.
+30-60s on cloud models. For time-sensitive panels, skip the local seat
+entirely rather than overriding `--max-turns`. If the user explicitly requests
+a lower turn limit for a local seat, pass `--max-turns` only for that seat.
 
 ### Stale imports when shared constants are removed from model_utils.py
 
@@ -1006,7 +1018,7 @@ python3 prompt_model.py -m deepseek-v4-pro:cloud \
     -p "Review the plan at /path/to/plan.md against source files in /path/to/src/.
          Update the plan with any fixes found." \
     -t file,terminal \
-    --max-turns 15 --timeout 600 \
+    --timeout 600 \
     -o /tmp/review-output.md
 ```
 
@@ -1117,4 +1129,5 @@ python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
 
 - `scripts/prompt_model.py` — The primitive
 - `references/` — Real-run logs (historical, from council v1 and advisors v2)
+- `references/real-run-v6-state-machine-design-2026-06-28.md` — **Pattern 7 in action:** 3-round iterative plan refinement for the v6 SDLC state machine (45-iteration scaling). 7 advisor calls across 3 rounds (broad → targeted → features). Key learnings: split recommendation is a strong signal, targeted verification saves cost, integrate don't build standalone, 45 iterations changes everything.
 - `references/adversarial-self-review-2026-06-28.md` — Live test: Pattern 5 reviewing the skill that defines Pattern 5. Validates the adversarial round catches real controller synthesis errors.
