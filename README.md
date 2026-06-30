@@ -21,7 +21,7 @@ hermes skills check
 hermes skills update
 ```
 
-## Skills (24)
+## Skills (25)
 
 See [CATALOG.md](CATALOG.md) for the full list.
 
