@@ -8,6 +8,8 @@ description: >
   skills, and multi-turn reasoning. No delegate_task, no gateway-restart risk.
 version: 3.3.0
 author: agent
+license: MIT
+platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [multi-model, consensus, ensemble, reasoning, parallel, primitive]

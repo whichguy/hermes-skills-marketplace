@@ -1,12 +1,13 @@
 # Hermes Skills Marketplace Catalog
 
-<!-- 24 skills -->
+<!-- 27 skills -->
 
 ## All Skills
 
 | Name | Category | Description |
 |------|----------|-------------|
 | [apple-macos-apps](skills/apple-macos-apps/SKILL.md) | productivity | macOS Apple app integrations: Apple Notes (memo), Reminders  |
+| [ask](skills/ask/SKILL.md) | productivity | Prompt any Ollama model/alias; fuzzy alias resolution, paral |
 | [bfl-api](skills/bfl-api/SKILL.md) | creative | BFL (Black Forest Labs) API integration guide for FLUX model |
 | [computer-use](skills/computer-use/SKILL.md) | desktop | Drive the user's desktop in the background — clicking, typin |
 | [cron-llm-review-house-style](skills/cron-llm-review-house-style/SKILL.md) | devops | Convert script-only Hermes cron jobs into script→LLM-review→ |
@@ -19,6 +20,8 @@
 | [hermes-whatsapp-gateway](skills/hermes-whatsapp-gateway/SKILL.md) | productivity | Configure, pair, verify, and troubleshoot the Hermes Gateway |
 | [home-assistant-smart-home-control](skills/home-assistant-smart-home-control/SKILL.md) | productivity | Control and troubleshoot smart-home devices through Home Ass |
 | [html-artifact](skills/html-artifact/SKILL.md) | creative | Build self-contained HTML files to explain, plan, or review. |
+| [information-gain](skills/information-gain/SKILL.md) | autonomous-ai-agents | Ranks the clarifying questions an underspecified prompt most |
+| [investigator](skills/investigator/SKILL.md) | autonomous-ai-agents | Autonomously resolves a task's unknowns before answering: ra |
 | [live-event-status-updates](skills/live-event-status-updates/SKILL.md) | research | Use when providing repeated live status updates for sports m |
 | [messaging-platform-formatting](skills/messaging-platform-formatting/SKILL.md) | productivity | Format assistant responses for messaging-platform gateways s |
 | [scheduled-research-briefs](skills/scheduled-research-briefs/SKILL.md) | research | Design, run, and refine scheduled research/monitoring briefs |

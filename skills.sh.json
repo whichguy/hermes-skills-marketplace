@@ -5,7 +5,9 @@
       "title": "autonomous-ai-agents",
       "skills": [
         "advisors",
-        "hermes-ecosystem-research"
+        "hermes-ecosystem-research",
+        "information-gain",
+        "investigator"
       ]
     },
     {
@@ -36,6 +38,7 @@
       "title": "productivity",
       "skills": [
         "apple-macos-apps",
+        "ask",
         "email-utils",
         "hardware-repair-research",
         "hermes-email-gateway",

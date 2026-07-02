@@ -21,9 +21,23 @@ hermes skills check
 hermes skills update
 ```
 
-## Skills (24)
+## Skills (27)
 
 See [CATALOG.md](CATALOG.md) for the full list.
+
+## Releasing updates (two-home skills)
+
+Some skills are distribution snapshots of a canonical source elsewhere; refresh = rsync the source
+over `skills/<name>/` (keep the marketplace-only SKILL.md hub-install blocks), bump `version` in
+frontmatter + `.well-known/skills/index.json`, re-run the validators, commit + push:
+
+- `information-gain`, `investigator` — source: `hermes-agent` repo (`whichguy/hermes-agent-1`,
+  `skills/autonomous-ai-agents/<name>/`).
+- `ask` — source: the live `$HERMES_HOME/skills/productivity/ask/` (exclude caches/dev files).
+
+Installers must pin categories (dependency paths resolve through them):
+`ask --category productivity`, then `information-gain --category autonomous-ai-agents`,
+then `investigator --category autonomous-ai-agents`.
 
 ## Config-Code Separation
 
