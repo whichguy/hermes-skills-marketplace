@@ -19,9 +19,9 @@
     },
     {
       "name": "ask",
-      "description": "Prompt any Ollama model or alias ('ask <model> <question>'): fuzzy alias resolution, session capture for follow-ups, parallel multi-model comparison. Provides the model_utils dispatch layer other skills (information-gain, investigator) reuse.",
+      "description": "Prompt any Ollama model or alias ('ask <model> <question>'): fuzzy alias resolution, session capture for follow-ups, parallel multi-model comparison. Provides the model_utils dispatch layer other skills (next-best-questions, investigator) reuse.",
       "category": "productivity",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Hermes Agent",
       "license": "MIT",
       "platforms": [
@@ -261,27 +261,10 @@
       "path": "skills/html-artifact/SKILL.md"
     },
     {
-      "name": "information-gain",
-      "description": "Ranks the clarifying questions an underspecified prompt most needs answered, by Expected Value of Sample Information (value = sqrt(U*EVSI)): projects plausible answers, scores plan-change x stakes, dedups/diversifies, reports pre-answer vs assume-default. Report-only. Requires the ask skill (install to productivity/ask first). OLLAMA_URL/INFOGAIN_* env-tunable.",
-      "category": "autonomous-ai-agents",
-      "version": "1.0.1",
-      "author": "Hermes Agent",
-      "license": "MIT",
-      "platforms": [
-        "linux",
-        "macos",
-        "windows"
-      ],
-      "requires_toolsets": [],
-      "config_keys": [],
-      "required_env": [],
-      "path": "skills/information-gain/SKILL.md"
-    },
-    {
       "name": "investigator",
-      "description": "Autonomously RESOLVES a task's unknowns before answering: loops the information-gain ranker, researches top questions with a full Hermes agent, folds distilled facts into a growing context until convergence, then responds. Requires ask (productivity/ask) and information-gain (autonomous-ai-agents/information-gain).",
+      "description": "Autonomously RESOLVES a task's unknowns before answering: loops the next-best-questions ranker, researches top questions with a full Hermes agent, folds distilled facts into a growing context until convergence, then responds. Requires ask (productivity/ask) and next-best-questions (autonomous-ai-agents/next-best-questions).",
       "category": "autonomous-ai-agents",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "Hermes Agent",
       "license": "MIT",
       "platforms": [
@@ -333,6 +316,23 @@
       ],
       "required_env": [],
       "path": "skills/messaging-platform-formatting/SKILL.md"
+    },
+    {
+      "name": "next-best-questions",
+      "description": "The NEXT-BEST QUESTIONS to answer for an underspecified prompt, ranked (formerly 'information-gain'), by Expected Value of Sample Information (value = sqrt(U*EVSI)): projects plausible answers, scores plan-change x stakes, dedups/diversifies, reports pre-answer vs assume-default. Report-only. Requires the ask skill (install to productivity/ask first). OLLAMA_URL/INFOGAIN_* env-tunable.",
+      "category": "autonomous-ai-agents",
+      "version": "1.1.0",
+      "author": "Hermes Agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [],
+      "required_env": [],
+      "path": "skills/next-best-questions/SKILL.md"
     },
     {
       "name": "scheduled-research-briefs",

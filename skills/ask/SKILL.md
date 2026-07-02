@@ -6,14 +6,14 @@ description: >
   follow-up questions. Comparison mode: "ask deepseek kimi <question>" dispatches
   multiple models in parallel. Each call is a full Hermes agent with tools and
   multi-turn reasoning. Replies inline with a model badge.
-version: 1.0.1
+version: 1.0.2
 author: agent
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [multi-model, prompt, productivity, alias]
-    related_skills: [advisors, dev, information-gain, investigator]
+    related_skills: [advisors, dev, next-best-questions, investigator]
     config:
     - key: ask.enabled
       description: Enable the ask skill
@@ -33,7 +33,7 @@ to full model names so the user doesn't need to remember exact IDs.
 
 Beyond the chat command, this skill is also the **model-dispatch library** for other skills:
 `scripts/model_utils.py` (alias resolution, prompt building, `dispatch_single`) is imported at
-runtime by `information-gain` and `investigator`, resolved via
+runtime by `next-best-questions` and `investigator`, resolved via
 `$HERMES_HOME/skills/productivity/ask/scripts` — which is why hub installs must place this skill
 under the `productivity` category, and install it first.
 

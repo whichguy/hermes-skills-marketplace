@@ -33,12 +33,12 @@ over `skills/<name>/` (keep the marketplace-only SKILL.md hub-install blocks; **
 canonical repos), bump `version` in frontmatter + `.well-known/skills/index.json`, re-run the
 validators, commit + push:
 
-- `information-gain`, `investigator` — source: `hermes-agent` repo (`whichguy/hermes-agent-1`,
+- `next-best-questions` (formerly `information-gain`), `investigator` — source: `hermes-agent` repo (`whichguy/hermes-agent-1`,
   `skills/autonomous-ai-agents/<name>/`).
 - `ask` — source: the live `$HERMES_HOME/skills/productivity/ask/` (exclude caches/dev files).
 
 Installers must pin categories (dependency paths resolve through them):
-`ask --category productivity`, then `information-gain --category autonomous-ai-agents`,
+`ask --category productivity`, then `next-best-questions --category autonomous-ai-agents`,
 then `investigator --category autonomous-ai-agents`.
 
 ## Config-Code Separation

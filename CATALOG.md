@@ -20,8 +20,8 @@
 | [hermes-whatsapp-gateway](skills/hermes-whatsapp-gateway/SKILL.md) | productivity | Configure, pair, verify, and troubleshoot the Hermes Gateway |
 | [home-assistant-smart-home-control](skills/home-assistant-smart-home-control/SKILL.md) | productivity | Control and troubleshoot smart-home devices through Home Ass |
 | [html-artifact](skills/html-artifact/SKILL.md) | creative | Build self-contained HTML files to explain, plan, or review. |
-| [information-gain](skills/information-gain/SKILL.md) | autonomous-ai-agents | Ranks the clarifying questions an underspecified prompt most |
 | [investigator](skills/investigator/SKILL.md) | autonomous-ai-agents | Autonomously resolves a task's unknowns before answering: ra |
+| [next-best-questions](skills/next-best-questions/SKILL.md) | autonomous-ai-agents | The next-best questions to answer for an underspecified prom |
 | [live-event-status-updates](skills/live-event-status-updates/SKILL.md) | research | Use when providing repeated live status updates for sports m |
 | [messaging-platform-formatting](skills/messaging-platform-formatting/SKILL.md) | productivity | Format assistant responses for messaging-platform gateways s |
 | [scheduled-research-briefs](skills/scheduled-research-briefs/SKILL.md) | research | Design, run, and refine scheduled research/monitoring briefs |
