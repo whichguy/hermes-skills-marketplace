@@ -28,8 +28,10 @@ See [CATALOG.md](CATALOG.md) for the full list.
 ## Releasing updates (two-home skills)
 
 Some skills are distribution snapshots of a canonical source elsewhere; refresh = rsync the source
-over `skills/<name>/` (keep the marketplace-only SKILL.md hub-install blocks), bump `version` in
-frontmatter + `.well-known/skills/index.json`, re-run the validators, commit + push:
+over `skills/<name>/` (keep the marketplace-only SKILL.md hub-install blocks; **exclude `tests/`**
+— the hub bundle fetch caps file count and the guard flags test env-fixtures, so tests stay in the
+canonical repos), bump `version` in frontmatter + `.well-known/skills/index.json`, re-run the
+validators, commit + push:
 
 - `information-gain`, `investigator` — source: `hermes-agent` repo (`whichguy/hermes-agent-1`,
   `skills/autonomous-ai-agents/<name>/`).
