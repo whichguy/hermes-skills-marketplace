@@ -137,6 +137,82 @@ the live skill:
   frozen formula is validated within-task, not just between-regime. See `evsi-validation-findings.md`
   §"Comparative elicitation (#24)".
 
+## Sampled P(a) (#26) — built, off by default, A/B-gated
+
+The 2024-26 literature converges on one critique of rankers like ours: the load-bearing numbers are
+**LLM self-reported**, and LLM probabilities are poorly calibrated — BED-LLM (arXiv:2508.21184) shows
+Monte-Carlo EIG from *sampled* answer rollouts materially beats LLM-scored/entropy proxies; OPEN
+(arXiv:2403.05534) offloads probability estimation from the LLM for the same reason. That maps
+directly onto our one measured weakness (within-task ranking, ρ≈0.34-0.36) — so #26 replaces the
+projection call's stated `P(a)` with an **empirical forced-choice frequency**, gated exactly like #24:
+
+- **Cheap hybrid, not free-form rollouts.** The projection call is unchanged (it still enumerates the
+  answer support + `derivable_prob`). Then N (default 6) tiny forced-choice draws — options shuffled
+  per draw to kill position bias, temperature 1.0, ~16 output tokens, "reply with the option number"
+  — and Laplace-smoothed (α=0.5) frequencies become `P(a)`. This tests the calibration claim at ~1/7
+  the cost of free-form sampling and avoids fragile free-text→option mapping on local models.
+- **Stated probs survive** as `stated_prob` (the control arm and the fallback: < ⌈N/2⌉ parseable
+  draws → keep stated, tag `prob_mode_used="stated-fallback"`). `voi.py` reads the same `prob` field
+  — the frozen formula is untouched; only the input estimate changes.
+- **Selector** — `answer_prob_mode` ("stated" | "sampled", default **"stated"**), special-cased like
+  `value_judge_mode`; absent key → "stated", so every cfg built from DEFAULTS is byte-identical.
+  Knobs `answer_samples` / `answer_sample_temperature` in DEFAULTS. One branch at the projection
+  seam (`infogain.run`).
+- **The gate** — `validate_evsi --ab-probs`: the run samples, then the SAME records are re-scored
+  under stated P (swap `prob`↔`stated_prob` + `voi.score_record` — zero extra model calls); realized
+  is measured once over the union of each arm's top-N answers. `analyze_evsi`'s generalized A/B gate
+  (control = `stated`) applies the #24 decisive rule: adopt only on a broad, beyond-noise Δρ > 0.02
+  win on `realized_regret` at n=12.
+- Smoke-verified: the arms genuinely diverge (11/14 pairs shift P by >0.05, 9/14 shift q_value).
+- **A/B verdict (2026-07-02): #26 CLOSED — KEEP STATED (powered null).** Powered 12-prompt
+  REALIZED_SUBSET A/B, all-`fast` pinned (judge/elicit/gen), 488 rows / 244 shared realized pairs:
+  on the PRIMARY target `realized_regret`, Δρ mean **+0.010** (sd 0.39, se 0.11), sampled wins only
+  4/12 — nowhere near the broad-win gate. Secondary `realized_stakes` +0.041 (7/12) also
+  indecisive. The null is REAL, not a no-contrast artifact: the arms disagreed on 79% of pairs
+  (|ΔP| > 0.05) and shifted q_value on 76% — a materially different P estimate that produced the
+  same within-task discrimination. Conclusion mirrors #24: the binding weakness of within-task
+  ranking is NOT input miscalibration of P(a); BED-LLM's calibration gains don't transfer to this
+  utility-weighted, coarse-realized-target setting. Sampled stays built + off as a documented
+  negative result. **Bonus replication:** the same run's p1c ablation ranks `√(U·EVSI)` best on ALL
+  three realized targets (regret +0.356 ≈ the prior +0.360; stakes +0.266; change +0.325) — a
+  second independent within-task validation of the frozen formula.
+
+## Solution-space Δplan (#27) — built, off by default, A/B-gated
+
+Second frontier critique (Active Task Disambiguation, arXiv:2502.04485; ClarifyGPT): score questions
+by how they **split the viable solution set**, not by an abstract "how much would your response
+change, 0-1?" judgment. #27 grounds `delta_plan` in a concrete self-consistency set:
+
+- **Stage 0b, once per run** — `pipeline.sample_solutions`: K (default 4) candidate responses;
+  solution 1 is the existing `baseline_plan` (free), K−1 sampled at temperature 0.8. Reused across
+  ALL questions and rounds → +K−1 = 3 calls per run, the cheapest experiment yet.
+- **Stage 3 variant** — `pipeline.judge_plan_change_solution[_batch]`: for each projected answer the
+  judge returns which of the K numbered solutions remain viable if it's true; `delta_plan =
+  invalidated/K` (plus `viable_solutions` as a diagnostic). Stakes elicitation unchanged. Same
+  output fields → drop-in for `voi.score_record`, exactly like the pairwise judge; safe-zeroes on
+  parse failure.
+- **Selector** — `value_judge_mode="solution"` (a third choice on the #24 seam); knobs
+  `solution_samples` / `solution_temperature`. `infogain.run` samples once after framing and binds
+  the solution set via `functools.partial`.
+- **Accepted caveat** — Δplan quantizes to {0, 1/K, …, 1} and a collapsed solution set (K
+  near-identical responses) pushes it toward 0/1. Inherent to the framing; the gate decides whether
+  grounding beats granularity.
+- **The gate** — `validate_evsi --ab-solution` (re-judge the same records, realized shared;
+  `--answer-prob-mode sampled` pins the #26 winner if adopted), same decisive rule, control =
+  `absolute`.
+- **A/B verdict (2026-07-02): #27 CLOSED — KEEP ABSOLUTE (powered, decisively worse).** Powered
+  12-prompt REALIZED_SUBSET A/B, all-`fast` pinned, stated P (#26 closed first), 432 rows / 216
+  shared pairs: solution Δplan within-task ρ on `realized_regret` is **−0.047 vs absolute +0.360**
+  (paired Δρ **−0.343**, loses 7/10) and negative on stakes too (−0.169). The accepted-caveat
+  failure mode is exactly what happened: the anticipated collapse — **69% of solution deltas are
+  exactly 0** ("no solution invalidated") and most of the rest land at 1.0 (support ≈ {0: 149,
+  1: 45}) — flattens Δplan to near-binary and destroys within-task discrimination, even though the
+  arms diverged on 90% of pairs. Active Task Disambiguation's solution-space scoring does not
+  survive contact with a small sampled solution set + a strict viability judge in this domain. The
+  absolute 0-1 judge, for all its known fragility, carries strictly more within-task signal.
+  Solution stays built + off as a documented negative result; do NOT iterate on K or judge leniency
+  without a new hypothesis for the mass-at-zero problem.
+
 ## Pre-mortem lens (#25) — a fourth question family, auto-on by design
 
 The three existing lenses cover coverage (scoped), premise (contrarian), and source-divergence
