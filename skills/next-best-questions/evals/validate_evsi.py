@@ -268,6 +268,8 @@ def main(argv=None):
                         "run, sample K candidate solutions once and re-judge the SAME records "
                         "(Δplan = invalidated/K), sharing the realized measurement. Rows tagged "
                         "method=absolute|solution. Mutually exclusive with --ab/--ab-probs.")
+    p.add_argument("--value-judge-mode", choices=["absolute", "behavior"], default=None,
+                   help="#28 proxy-sanity: elicit projected Δplan with the behavior judge.")
     p.add_argument("--answer-prob-mode", choices=["stated", "sampled"], default=None,
                    help="pin the P(a) estimate for the run (#26). Use `sampled` here iff #26 was "
                         "adopted, so a #27 A/B runs both arms on the winning P mode.")
@@ -276,6 +278,8 @@ def main(argv=None):
                         "attribution (default: flat generator, empty lens).")
     p.add_argument("--premortem", choices=["auto", "on", "off"], default="auto",
                    help="premortem lens setting when --families is on.")
+    p.add_argument("--reach", choices=["auto", "on", "off"], default="auto",
+                   help="reach lens (#29) setting when --families is on.")
     p.add_argument("--keep-responses", action="store_true",
                    help="store baseline + re-derived response TEXTS on each row so judge variants "
                         "can be A/B'd offline (evals/rejudge.py) without a second realized pass.")
@@ -302,8 +306,11 @@ def main(argv=None):
         cfg["answer_prob_mode"] = "sampled"  # the run itself samples; the stated arm is a re-score
     elif args.answer_prob_mode:
         cfg["answer_prob_mode"] = args.answer_prob_mode  # e.g. pin the #26 winner under --ab-solution
+    if getattr(args, "value_judge_mode", None):
+        cfg["value_judge_mode"] = args.value_judge_mode  # #28 proxy-sanity: behavior-Δ elicitation
     if args.families:
-        cfg["families"] = infogain.families_cfg(args.premortem, families_model=args.gen_model)
+        cfg["families"] = infogain.families_cfg(args.premortem, families_model=args.gen_model,
+                                                reach=args.reach)
     judge_model = pipeline.resolve_alias(args.judge_model)  # alias -> real model name
     preflight_model(judge_model, "judge")
     preflight_model(pipeline.resolve_alias(cfg["value_judge_model"]), "elicit")
