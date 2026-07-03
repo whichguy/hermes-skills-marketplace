@@ -1,6 +1,6 @@
 # Hermes Skills Marketplace Catalog
 
-<!-- 27 skills -->
+<!-- 28 skills -->
 
 ## All Skills
 
@@ -21,6 +21,7 @@
 | [home-assistant-smart-home-control](skills/home-assistant-smart-home-control/SKILL.md) | productivity | Control and troubleshoot smart-home devices through Home Ass |
 | [html-artifact](skills/html-artifact/SKILL.md) | creative | Build self-contained HTML files to explain, plan, or review. |
 | [investigator](skills/investigator/SKILL.md) | autonomous-ai-agents | Autonomously resolves a task's unknowns before answering: ra |
+| [investigate-plan](skills/investigate-plan/SKILL.md) | autonomous-ai-agents | Claude Code plan-mode adapter that researches a plan's open  |
 | [next-best-questions](skills/next-best-questions/SKILL.md) | autonomous-ai-agents | The next-best questions to answer for an underspecified prom |
 | [live-event-status-updates](skills/live-event-status-updates/SKILL.md) | research | Use when providing repeated live status updates for sports m |
 | [messaging-platform-formatting](skills/messaging-platform-formatting/SKILL.md) | productivity | Format assistant responses for messaging-platform gateways s |

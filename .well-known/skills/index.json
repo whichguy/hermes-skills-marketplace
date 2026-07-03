@@ -508,6 +508,27 @@
       ],
       "required_env": [],
       "path": "skills/versioning-hermes-home/SKILL.md"
+    },
+    {
+      "name": "investigate-plan",
+      "description": "Use from Claude Code plan mode for /investigate-plan, investigate this plan, research the plan's unknowns, or resolve the open unknowns before I approve. Companion to the plan-unknowns-gate hook that drives the Hermes investigator skill and folds resolved facts into the plan.",
+      "category": "autonomous-ai-agents",
+      "version": "1.0.0",
+      "author": "agent",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "investigate-plan.k",
+        "investigate-plan.max_rounds",
+        "investigate-plan.capability",
+        "investigate-plan.floor"
+      ],
+      "required_env": [],
+      "path": "skills/investigate-plan/SKILL.md"
     }
   ]
 }
