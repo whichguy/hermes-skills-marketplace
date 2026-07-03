@@ -321,7 +321,7 @@
       "name": "next-best-questions",
       "description": "The NEXT-BEST QUESTIONS to answer for an underspecified prompt, ranked (formerly 'information-gain'), by Expected Value of Sample Information (value = sqrt(U*EVSI)): projects plausible answers, scores plan-change x stakes, dedups/diversifies, reports pre-answer vs assume-default. Report-only. Requires the ask skill (install to productivity/ask first). OLLAMA_URL/INFOGAIN_* env-tunable.",
       "category": "autonomous-ai-agents",
-      "version": "1.3.1",
+      "version": "1.3.2",
       "author": "Hermes Agent",
       "license": "MIT",
       "platforms": [
