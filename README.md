@@ -31,7 +31,9 @@ Some skills are distribution snapshots of a canonical source elsewhere; refresh 
 over `skills/<name>/` (keep the marketplace-only SKILL.md hub-install blocks; **exclude `tests/`**
 — the hub bundle fetch caps file count and the guard flags test env-fixtures, so tests stay in the
 canonical repos), bump `version` in frontmatter + `.well-known/skills/index.json`, re-run the
-validators, commit + push:
+validators, commit + push. Run the validators with the container venv python — macOS system 3.9
+fails on the `X | None` annotations and homebrew 3.13 lacks pyyaml:
+`docker exec -w /opt/data/hermes-skills-marketplace hermes /opt/hermes/.venv/bin/python scripts/validate_skill.py skills/<name>`:
 
 - `next-best-questions` (formerly `information-gain`), `investigator` — source: `hermes-agent` repo (`whichguy/hermes-agent-1`,
   `skills/autonomous-ai-agents/<name>/`).
