@@ -154,6 +154,12 @@ check cleanup-removes-investigation no "$([ -e "$PL/.needs-investigation-inv" ] 
 check cleanup-keeps-review-ready yes "$([ -e "$PL/.review-ready-inv" ] && echo yes || echo no)"
 rm -f "$PL"/.*-inv
 
+touch "$PL/.needs-investigation-my-plan-" "$PL/.worktree-assessed-my-plan-"
+pf "my plan!" | CLAUDE_PLANS_DIR="$PL" "$CLEAN" >/dev/null 2>&1
+check cleanup-removes-special-char-needsinv yes "$([ ! -e "$PL/.needs-investigation-my-plan-" ] && echo yes || echo no)"
+check cleanup-removes-special-char-worktree yes "$([ ! -e "$PL/.worktree-assessed-my-plan-" ] && echo yes || echo no)"
+rm -f "$PL/.needs-investigation-my-plan-" "$PL/.worktree-assessed-my-plan-"
+
 python3 - "$G" <<'EOF' || fails=$((fails+1))
 import importlib.util, subprocess, sys
 spec = importlib.util.spec_from_file_location("g", sys.argv[1])

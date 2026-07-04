@@ -14,6 +14,7 @@ here would break that. Fails silently — cleanup must never disrupt anything.
 
 import json
 import os
+import re
 import sys
 
 PLANS_DIR = os.environ.get("CLAUDE_PLANS_DIR") or os.path.expanduser("~/.claude/plans")
@@ -40,6 +41,7 @@ def main():
         base = base[:-3]
     if not base:
         return
+    base = re.sub(r"[^A-Za-z0-9._-]", "-", base)[:64] or "plan"
     for kind in KINDS:
         try:
             os.remove(os.path.join(PLANS_DIR, ".%s-%s" % (kind, base)))
