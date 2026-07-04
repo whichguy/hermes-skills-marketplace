@@ -264,7 +264,7 @@
       "name": "investigator",
       "description": "Autonomously RESOLVES a task's unknowns before answering: loops the next-best-questions ranker, researches top questions with a full Hermes agent, folds distilled facts into a growing context until convergence, then responds. Requires ask (productivity/ask) and next-best-questions (autonomous-ai-agents/next-best-questions).",
       "category": "autonomous-ai-agents",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": "Hermes Agent",
       "license": "MIT",
       "platforms": [
