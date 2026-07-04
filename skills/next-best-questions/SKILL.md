@@ -10,7 +10,7 @@ description: >
   recommendations (pre-answer / assume-default) using role-specialized local Ollama models. Reports
   only — it does not ask the user or answer the questions itself. Triggers: "what should I clarify",
   "what questions matter here", "is this spec complete", "what am I missing before I start".
-version: 1.3.3
+version: 1.3.4
 author: agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -47,6 +47,8 @@ metadata:
 ---
 
 # Next-Best-Questions — what to clarify before you start
+
+> See `../nbq-improve/SKILL.md` for the improvement protocol for this skill.
 
 ## Overview
 
@@ -249,14 +251,6 @@ comparability with the powered datasets.
 Reuses the `ask` skill's dispatch helpers (`model_utils.py`). The scripts resolve it at runtime via
 `HERMES_HOME` (default `~/.hermes` → `/opt/data` in-container) or an explicit `ASK_SCRIPTS_DIR`. If
 the `ask` skill isn't installed, the scripts exit with a clear message.
-
-**Hub install (install `ask` first — it must land at `productivity/ask`):**
-```bash
-hermes skills install whichguy/hermes-skills-marketplace/skills/ask --category productivity
-hermes skills install whichguy/hermes-skills-marketplace/skills/next-best-questions --category autonomous-ai-agents
-```
-*(Renamed from `information-gain` at 1.1.0 — same skill; the `INFOGAIN_*` env vars and
-`scripts/infogain.py` names are unchanged.)*
 
 ## Common Pitfalls
 
