@@ -49,6 +49,10 @@ metadata:
       description: Max autonomous judgment-call decisions accepted per run (including resumed) before overflow routes to research
       default: 6
       prompt: Max autonomous assumptions per run?
+    - key: investigator.key_gap_threshold
+      description: Minimum ranked value for surfacing a NOT_FOUND gap as a key unresolved question
+      default: 0.40
+      prompt: Minimum value for a key unresolved question?
     - key: investigator.output
       description: Final output — response (classic final response) | prompt (refined prompt only) | both
       default: response
@@ -115,6 +119,11 @@ python3 ${HERMES_SKILL_DIR}/scripts/iterate.py --problem "<task>" --triage on --
 python3 ${HERMES_SKILL_DIR}/scripts/iterate.py --problem "<task>" --run-dir $HERMES_HOME/state/inv-<slug>
 python3 ${HERMES_SKILL_DIR}/scripts/iterate.py --problem "<task>" --dry-run   # loop logic, no model calls
 ```
+
+CLI settings can also fall back to `INVESTIGATOR_TRIAGE`, `INVESTIGATOR_OUTPUT`,
+`INVESTIGATOR_TRIAGE_MODEL`, `INVESTIGATOR_JUDGE_MODEL`, `INVESTIGATOR_MAX_ROUNDS`, and
+`INVESTIGATOR_MAX_ASSUMES`, and `INVESTIGATOR_KEY_GAP_THRESHOLD`. Precedence is CLI flag > env
+var > built-in default.
 
 ## Durability (`--run-dir`)
 
@@ -219,6 +228,13 @@ When `--run-dir` is set, `prompt`/`both` modes also write `refined-prompt.md` to
 - **NOT_FOUND** (`Q → gap`) — recorded as a known gap; the final response proceeds with a stated
   assumption. (No revival machinery yet — v1.)
 - **user-only** — a genuine preference no investigation can resolve → surfaced as a clarifying question.
+
+ANSWERED and NOT_FOUND tombstones may also carry the ranked question's optional, nullable `value`,
+maximum branch `stakes`, and `recommendation`. Old journal tombstones without these additive fields
+remain valid; readers must treat absent values as `None`. The `iterate()` result additionally exposes
+`unresolved_key_questions`: NOT_FOUND gaps at or above `key_gap_threshold` (default `0.40`) plus the
+single highest-value gap, deduplicated by question and sorted by descending value. This key is also
+additive; readers of older result dicts must tolerate its absence.
 
 ## Status (v1, validated with caveats)
 

@@ -73,6 +73,14 @@ string alone without needing the `via` field:
 | `q -> decision (assumed: rationale)` | `assumed` | an autonomous judgment call — a decision, not a discovered fact |
 | `q -> (known gap: ...)` | whichever route produced the NOT_FOUND | unresolved; carried forward as a known gap |
 
+Every new tombstone also carries the ranked question's optional, nullable `value`, maximum answer-
+branch `stakes`, and `recommendation`, attached centrally by `_tombstone`. Old journal tombstones
+without these fields remain valid, and readers must use optional access and treat them as `None`.
+The `iterate()` result's additive `unresolved_key_questions` list surfaces NOT_FOUND gaps whose
+value reaches `key_gap_threshold` (default `0.40`) and always includes the single highest-value gap;
+entries are deduplicated by question and value-sorted. Older result dicts without this key remain
+valid as well.
+
 `respond()` is content-gated on the inferred-evidence markers: any evidence string containing
 `"(assumed:"` or `"(derived"` triggers the "treat as inferred, not observed" framing and its
 assumptions/known-gaps ledger; absent those markers its prompt is byte-identical to pre-1.2.0 (a
