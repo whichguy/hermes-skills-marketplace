@@ -124,6 +124,26 @@ check s3-menu-off-investigate-plan yes "$(has_str $T/o '/investigate-plan')"
 check s3-menu-off-waive-investigation yes "$(has_str $T/o '/waive-investigation')"
 rm -f "$PL/.investigated-inv-menu" "$PL/.investigation-waived-inv-menu"
 
+# Stage 3: prose and fenced mentions are not active investigation tags.
+mkplan inv-prose '# P\n\nsteps\n\n## Open Unknowns\n- the [investigate] tag is documented here, not a real tag'
+pf inv-prose | PATH="$UP:/usr/bin:/bin" CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"; check s3-prose-tag-allow allow "$(outcome $T/o)"
+mkplan inv-fenced '# P\n\nsteps\n\n## Open Unknowns\n```\n- example [investigate]\n```'
+pf inv-fenced | PATH="$UP:/usr/bin:/bin" CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"; check s3-fenced-tag-allow allow "$(outcome $T/o)"
+# Stage 3: a bullet ending with [investigate] still requires investigation.
+mkplan inv-tagged '# P\n\nsteps\n\n## Open Unknowns\n- **x** — matters. *Resolve:* probe. [investigate]'
+pf inv-tagged | PATH="$UP:/usr/bin:/bin" CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"; check s3-ending-tag-deny deny "$(decision $T/o)"
+
+# Stage 2: only an end-of-bullet Codex tag writes the investigation sentinel.
+mkplan nh-prose '# P\n\njust steps, no audit'
+pf nh-prose | PATH="$CX:/usr/bin:/bin" CX_TAG='[investigate] is documented here' CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"
+check s2-prose-tag-deny deny "$(decision $T/o)"
+check s2-prose-no-sentinel no "$([ -f "$PL/.needs-investigation-nh-prose" ] && echo yes || echo no)"
+mkplan nh-tagged '# P\n\njust steps, no audit'
+pf nh-tagged | PATH="$CX:/usr/bin:/bin" CX_TAG='[investigate]' CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"
+check s2-ending-tag-deny deny "$(decision $T/o)"
+check s2-ending-tag-sentinel yes "$([ -f "$PL/.needs-investigation-nh-tagged" ] && echo yes || echo no)"
+rm -f "$PL/.needs-investigation-nh-prose" "$PL/.needs-investigation-nh-tagged"
+
 # Cleanup hook removes the investigation sentinels but LEAVES .review-ready
 # (owned by review-plan / the plugin's own cleanup).
 CLEAN="$(cd "$(dirname "$0")" && pwd)/plan-review-cleanup.py"

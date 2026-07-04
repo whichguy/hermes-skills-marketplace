@@ -45,6 +45,7 @@ INVESTIGATE_TAG = "[investigate]"
 
 # Markdown heading line: up to 3 spaces indent, 1-6 hashes, then a space.
 HEADING_RE = re.compile(r"^[ \t]{0,3}(#{1,6})[ \t]+(.*)$")
+BULLET_RE = re.compile(r"^[ \t]*([-*+]|[0-9]+[.)])[ \t]+")
 # Codex output heading may omit the space after the hashes; be lenient here
 # and normalize to the canonical form before it reaches the plan.
 SECTION_HEAD_RE = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]*open\s+unknowns\b", re.IGNORECASE | re.MULTILINE)
@@ -199,6 +200,20 @@ def has_unknowns_heading(text):
     return False
 
 
+def has_investigate_tag(text):
+    """True if a non-fenced markdown bullet ends with '[investigate]'."""
+    in_fence = False
+    for line in text.splitlines():
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if BULLET_RE.match(line) and line.rstrip().endswith(INVESTIGATE_TAG):
+            return True
+    return False
+
+
 def plan_slug(tool_input):
     """Plan basename without .md, matching the investigator's --slug. None if absent."""
     path = tool_input.get("planFilePath")
@@ -345,7 +360,7 @@ def main():
     if not has_unknowns_heading(plan):
         section = run_codex(plan, cwd)
         if section:
-            if INVESTIGATE_TAG in section:
+            if has_investigate_tag(section):
                 write_sentinel("needs-investigation", slug, section)
             deny(CODEX_REASON_TEMPLATE.format(section=section))
         deny(FALLBACK_REASON)
@@ -355,7 +370,7 @@ def main():
     # wrote directly. Needs a slug to track investigated/waived state; without
     # one we can't manage the loop, so fail open.
     if slug is not None:
-        needs = sentinel_exists("needs-investigation", slug) or (INVESTIGATE_TAG in plan)
+        needs = sentinel_exists("needs-investigation", slug) or has_investigate_tag(plan)
         if needs and not sentinel_exists("investigated", slug) \
                 and not sentinel_exists("investigation-waived", slug):
             if container_running():
