@@ -221,7 +221,8 @@ def plan_slug(tool_input):
         base = os.path.basename(path)
         if base.endswith(".md"):
             base = base[:-3]
-        return base or None
+        sanitized = re.sub(r"[^A-Za-z0-9._-]", "-", base)[:64]
+        return sanitized or "plan"
     return None
 
 

@@ -155,7 +155,7 @@ check cleanup-keeps-review-ready yes "$([ -e "$PL/.review-ready-inv" ] && echo y
 rm -f "$PL"/.*-inv
 
 python3 - "$G" <<'EOF' || fails=$((fails+1))
-import importlib.util, sys
+import importlib.util, subprocess, sys
 spec = importlib.util.spec_from_file_location("g", sys.argv[1])
 g = importlib.util.module_from_spec(spec); spec.loader.exec_module(g)
 sec = g.extract_section("Sure! Here it is:\n##Open Unknowns\n- **thing** — matters. *Suggestion:* do X.\n")
@@ -164,9 +164,32 @@ assert g.has_unknowns_heading("# P\n\n" + sec)
 big = "## Open Unknowns\n" + ("- bullet\n" * 3000)
 assert g.extract_section(big).endswith("(truncated)")
 assert g.extract_section("## Open Unknowns\n\n\n") is None
-assert g.plan_slug({"planFilePath": "/a/b/my-plan.md"}) == "my-plan"
+
+def shell_slug(base):
+    proc = subprocess.run(
+        "tr -c 'A-Za-z0-9._-' '-' | cut -c1-64",
+        shell=True,
+        input=base.encode("utf-8"),
+        stdout=subprocess.PIPE,
+        check=True,
+    )
+    return proc.stdout.decode("ascii").rstrip("\n")
+
+assert g.plan_slug({"planFilePath": "/a/b/my-plan.md"}) == shell_slug("my-plan")
+print("PASS slug-plain")
+assert g.plan_slug({"planFilePath": "/a/b/my plan review.md"}) == shell_slug("my plan review")
+print("PASS slug-spaces")
+assert g.plan_slug({"planFilePath": "/a/b/plañ-résumé.md"}) == shell_slug("plañ-résumé")
+print("PASS slug-unicode")
+long_base = "abcdefghij" * 8
+long_slug = g.plan_slug({"planFilePath": "/a/b/" + long_base + ".md"})
+assert long_slug == shell_slug(long_base) and len(long_slug) == 64
+print("PASS slug-truncated")
+assert shell_slug("") == ""
+assert g.plan_slug({"planFilePath": "/foo/bar/.md"}) == "plan"
+print("PASS slug-empty-fallback")
 assert g.plan_slug({}) is None
-print("PASS normalize/truncate/empty-section/slug")
+print("PASS normalize/truncate/empty-section/no-path-slug")
 EOF
 
 echo; [ "$fails" -eq 0 ] && echo "ALL PASS" || echo "$fails FAILURE(S)"; exit "$fails"

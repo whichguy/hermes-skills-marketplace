@@ -2,11 +2,11 @@
 """PostToolUse cleanup on ExitPlanMode.
 
 After a plan successfully exits plan mode, remove the per-slug investigation
-sentinels this gate created so the next plan-mode session starts fresh.
-Companion to plan-unknowns-gate.py (the PreToolUse gate). Slug is derived
-from tool_input.planFilePath, matching the gate.
+and worktree-assessment sentinels so the next plan-mode session starts fresh.
+Companion to the plan review PreToolUse gates. Slug is derived from
+tool_input.planFilePath, matching the gates.
 
-Scoped to the investigation sentinels only. The `.review-ready-<slug>`
+Scoped to the plan review gate sentinels only. The `.review-ready-<slug>`
 sentinel is owned by review-plan / the plugin's own ExitPlanMode cleanup
 (which renames it to `.exited-<slug>` for idempotent re-exit) — deleting it
 here would break that. Fails silently — cleanup must never disrupt anything.
@@ -21,6 +21,7 @@ KINDS = (
     "needs-investigation",
     "investigated",
     "investigation-waived",
+    "worktree-assessed",
 )
 
 
