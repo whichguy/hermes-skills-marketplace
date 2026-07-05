@@ -1,0 +1,41 @@
+{
+  "description": "Closed-loop plan-review gates. PreToolUse on ExitPlanMode runs plan-unknowns-gate.py, a 3-stage state machine (each fails open): (1) a soft review-plan nudge, hard under CLAUDE_PLAN_REQUIRE_REVIEW=1; (2) a Codex (OpenAI CLI, read-only sandbox) unknowns audit that blocks until an '## Open Unknowns' section exists and tags bullets needing active go-find-out research with [investigate]; (3) a closed-loop investigation gate — when agentic unknowns are tagged it blocks until /investigate-plan has run (proven by a host .investigated-<slug> sentinel) or the user waives via /waive-investigation, failing open when the hermes container is down. A sibling plan-worktree-gate.py advises when implementation warrants a documented '## Git Isolation Strategy', becomes a hard gate under CLAUDE_PLAN_WORKTREE_REQUIRE=1, opts out with CLAUDE_PLAN_WORKTREE_GATE=0, and defers to the unknowns gate until the plan is mature. PostToolUse runs plan-review-cleanup.py to clear the investigation sentinels after a successful exit. Opt out of the unknowns gate with CLAUDE_PLAN_UNKNOWNS_GATE=0.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/handlers/plan-unknowns-gate.py",
+            "statusMessage": "Codex auditing plan for unresolved unknowns...",
+            "timeout": 180
+          }
+        ]
+      },
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/handlers/plan-worktree-gate.py",
+            "statusMessage": "Codex assessing git-isolation strategy...",
+            "timeout": 180
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "ExitPlanMode",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/handlers/plan-review-cleanup.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
