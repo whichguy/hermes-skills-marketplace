@@ -1,0 +1,12 @@
+{
+  "run_at": "2026-07-06T04:00:37.907668+00:00",
+  "events_checked": 6,
+  "events_with_errors": 0,
+  "errors": [],
+  "changes": [],
+  "test_result": {
+    "returncode": 0,
+    "stdout_tail": "\u2705 2025 VWS2 (prior year)\n   22 links | VIRUS Weightlifting Series 2 | Aug 28, 2025 - Aug 31, 20\n\u2705 2025 Masters Nationals (prior year)\n   22 links | 2025 Masters National Championships | Apr 3, 2025 - Apr 6, 2025\n\u2705 2025 VIRUS Finals / UMWF (prior year \u2014 combined naming)\n   25 links | VIRUS Weightlifting Finals & UMWF World  | Dec 4, 2025 - Dec 7, 2025\n\n============================================================\nResults: 11 passed, 0 failed (11 total)\n\ud83c\udf89 All tests passed!",
+    "stderr_tail": ""
+  }
+}

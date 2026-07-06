@@ -93,7 +93,7 @@ Registration categories per national event typically include:
 
 (VWS1 has a different fee structure — $199 flat.)
 
-**Registration opens:** Typically January 1 of the event year, 2:00 p.m. MT.
+**Registration opens:** Varies by event — most events open **January 1 of the event year, 2:00 p.m. MT**. VWS1 is an exception: it opens **November 1 of the prior year, 12:01 a.m. MT** (with a flat $199 fee). Always check the specific event page for exact opening time.
 
 ### 3. Qualifying Totals
 
@@ -217,7 +217,7 @@ Understanding this timeline helps know what info is available when:
 
 ```
 August (prior year)    → Schedule announced (news article)
-January (event year)  → Registration opens (2:00 p.m. MT)
+January (event year)  → Registration opens (time varies by event — most at 2:00 p.m. MT; VWS1 at 12:01 a.m. MT)
 ~6 weeks before       → Early Bird registration closes
 ~4 weeks before       → Regular registration closes / Preliminary schedule
 ~2 weeks before       → Late registration closes / VFE

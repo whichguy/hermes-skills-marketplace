@@ -45,6 +45,7 @@ TESTS_2026 = [
             "dates_contains": "2026",
             "venue_contains": "Ed Robson",
             "has_fees": True,
+            "fee_amounts": ["$145", "$175", "$375"],  # L7: assert actual fee values
             "has_milestones": True,
             "has_results_link": True,
         },
@@ -82,6 +83,7 @@ TESTS_2026 = [
             "dates_contains": "Apr",
             "venue_contains": "Salt Palace",
             "has_fees": True,
+            "fee_amounts": ["$145", "$175", "$375"],  # L7: assert actual fee values
             "has_milestones": True,
             "has_results_link": True,
         },
@@ -100,6 +102,7 @@ TESTS_2026 = [
             "dates_contains": "Sep",
             "venue_contains": "Fort Worth",
             "has_fees": True,
+            "fee_amounts": ["$145", "$175", "$375"],  # L7: assert actual fee values
             "has_milestones": True,
             "has_results_link": False,
         },
@@ -130,6 +133,7 @@ TESTS_2026 = [
             "dates_contains": "Dec",
             "venue_contains": "Alameda",
             "has_fees": True,
+            "fee_amounts": ["$145", "$175", "$375"],  # L7: assert actual fee values
             "has_milestones": True,
         },
     },
@@ -252,6 +256,20 @@ def check_test(name: str, expected: dict, result: dict, verbose: bool) -> tuple[
 
     if expected.get("has_fees") and not result.get("metadata", {}).get("registration_fees"):
         failures.append("has_fees: no registration_fees in metadata")
+
+    # L7: Assert actual fee amounts, not just existence
+    expected_fees = expected.get("fee_amounts")
+    if expected_fees:
+        actual_fees = result.get("metadata", {}).get("registration_fees", {})
+        actual_fee_vals = set()
+        for tier, data in actual_fees.items():
+            if isinstance(data, dict):
+                actual_fee_vals.add(data.get("fee", ""))
+            else:
+                actual_fee_vals.add(data)
+        for expected_fee in expected_fees:
+            if expected_fee not in actual_fee_vals:
+                failures.append(f"fee_amounts: '{expected_fee}' not found in fees {actual_fee_vals}")
 
     if expected.get("has_milestones") and not result.get("metadata", {}).get("schedule_milestones"):
         failures.append("has_milestones: no schedule_milestones in metadata")

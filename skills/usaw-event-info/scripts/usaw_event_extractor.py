@@ -162,7 +162,7 @@ INFO_TYPES = {
         "description": "Start list / entry list",
     },
     "full_results": {
-        "aliases": ["full results", "results", "medal schedule"],
+        "aliases": ["full results", "results"],  # L3 fix: removed "medal schedule" — conflicts with medal_schedule type
         "url_patterns": [r"drive\.google\.com"],
         "category": "schedule",
         "description": "Full results (Google Drive folder)",
@@ -236,16 +236,21 @@ DATE_TIME_PATTERNS = {
 }
 
 FEE_PATTERNS = {
+    # L7 fix: More tolerant regex — handles "Early Bird Registration", "Early Registration",
+    # "Early Bird", and variations without exact "Bird" keyword. Captures fee in optional parens.
     "early_bird": re.compile(
-        r"Early\s+(?:Bird\s+)?Registration?\s*\(?(\$[\d,]+)\)?\s*.*?(?:Closes?\s*:?\s*)(.+?)(?:\n|$)",
+        r"Early\s+(?:Bird\s+)?Regist(?:er|ration)?\s*\(?(?:\$([\d,]+))\)?\s*"
+        r".*?(?:Closes?\s*:??\s*)(.+?)(?:\n|$)",
         re.IGNORECASE | re.DOTALL),
     "regular": re.compile(
-        r"Regular\s+Registration?\s*\(?(\$[\d,]+)\)?\s*.*?(?:Closes?\s*:?\s*)(.+?)(?:\n|$)",
+        r"Regular\s+Regist(?:er|ration)?\s*\(?(?:\$([\d,]+))\)?\s*"
+        r".*?(?:Closes?\s*:??\s*)(.+?)(?:\n|$)",
         re.IGNORECASE | re.DOTALL),
     "late": re.compile(
-        r"Late\s+Registration?\s*\(?(\$[\d,]+)\)?\s*.*?(?:Closes?\s*:?\s*)(.+?)(?:\n|$)",
+        r"Late\s+Regist(?:er|ration)?\s*\(?(?:\$([\d,]+))\)?\s*"
+        r".*?(?:Closes?\s*:??\s*)(.+?)(?:\n|$)",
         re.IGNORECASE | re.DOTALL),
-    "flat_fee": re.compile(r"Registration\s+(?:Cost|Fee)\s*:?\s*(\$[\d,]+)", re.IGNORECASE),
+    "flat_fee": re.compile(r"Regist(?:er|ration)?\s+(?:Cost|Fee)\s*:?\s*\$([\d,]+)", re.IGNORECASE),
 }
 
 SCHEDULE_MILESTONE_PATTERNS = {
@@ -565,10 +570,14 @@ def extract_inline_metadata(text: str) -> dict:
     for key, pattern in FEE_PATTERNS.items():
         m = pattern.search(text)
         if m:
+            # L7 fix: Regex now captures digits only (no $ prefix). Prepend $ for display.
+            fee_val = m.group(1)
+            if not fee_val.startswith("$"):
+                fee_val = "$" + fee_val
             if key == "flat_fee":
-                fees[key] = m.group(1)
+                fees[key] = fee_val
             else:
-                fees[key] = {"fee": m.group(1), "closes": m.group(2).strip()}
+                fees[key] = {"fee": fee_val, "closes": m.group(2).strip()}
     if fees:
         metadata["registration_fees"] = fees
 

@@ -1,0 +1,1697 @@
+{
+  "2026 National Championships": {
+    "source_url": "https://www.usaweightlifting.org/2026-national-championships",
+    "title": "2026 National Championships",
+    "dates_raw": "Jun 20, 2026 - Jun 28, 2026",
+    "venue_raw": "Ed Robson Arena",
+    "location_raw": "Colorado Springs, CO, United States",
+    "metadata": {
+      "dates": "June 20",
+      "qualification_period": "May 21, 2025 \u2013 May 21, 2026",
+      "registration_opens": "January 1, 2026 - 2:00 p.m. MT",
+      "registration_fees": {
+        "early_bird": {
+          "fee": "$145",
+          "closes": "May 7, 2026 - 2:00 p.m. MT"
+        },
+        "regular": {
+          "fee": "$175",
+          "closes": "May 21, 2026 - 2:00 p.m. MT"
+        },
+        "late": {
+          "fee": "$375",
+          "closes": "June 4, 2026 - 2:00 p.m. MT"
+        }
+      },
+      "schedule_milestones": {
+        "preliminary_schedule_released": "May 23, 2026 - 2:00 p.m. MT",
+        "verification_final_entries": "June 8, 2026 - 10:00-10:30 a.m. MT",
+        "final_schedule_released": "June 10, 2026 - 2:00 p.m. MT"
+      }
+    },
+    "info_by_type": {
+      "event_policy": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Event Calendars",
+          "url": "https://www.usaweightlifting.org/events",
+          "info_type": "event_policy",
+          "status": "available"
+        },
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events Policies",
+          "url": "https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules",
+          "info_type": "event_policy",
+          "status": "available"
+        }
+      ],
+      "schedule_announcement": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events",
+          "url": "https://www.usaweightlifting.org/national-events",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        },
+        {
+          "h2_section": "Related",
+          "h3_header": "2026 USA Weightlifting National Event Schedule",
+          "link_text": "2026 USA Weightlifting National Event ScheduleUSAW will visit the great states of Ohio, Utah, Texas, Colorado and California in 2026Aug 1, 2025",
+          "url": "https://www.usaweightlifting.org/news/2025/august/01/2026-usa-weightlifting-national-event-schedule",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        }
+      ],
+      "qualifying_totals": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "2026 Qualifying Totals",
+          "url": "https://www.usaweightlifting.org/2026-usa-weightlifting-national-event-qualifying-totals",
+          "info_type": "qualifying_totals",
+          "status": "available"
+        }
+      ],
+      "event_guide": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Sanction YourEvent",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltd5de9851be8e33a4/6579dadd7cf4a94fa4f5dcba/updated_links_-_hosting_a_usa_weightlifting_sanctioned_event_2023.pdf",
+          "info_type": "event_guide",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Event Guide",
+          "link_text": "View",
+          "url": "https://www.canva.com/design/DAHKxrC8Qzs/HztLHYtmZqLcuSxK_kIjgA/view?utm_content=DAHKxrC8Qzs&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=h1979c9b57e",
+          "info_type": "event_guide",
+          "status": "available"
+        }
+      ],
+      "live_stream": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Watch Live",
+          "url": "https://www.usaweightlifting.org/live",
+          "info_type": "live_stream",
+          "status": "available"
+        }
+      ],
+      "team_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Glen Middleton award team registration",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/e/1FAIpQLSdwZmZ7MlP_7uuhRd0NOAJqaZFXm6-k2DHaky6KA86h4PNEhA/viewform",
+          "info_type": "team_registration",
+          "status": "available"
+        }
+      ],
+      "registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14372/overview",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14372/overview",
+            "platform": "sport80",
+            "meet_id": "14372",
+            "pattern": "v/meets"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "U25 National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14382/overview",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14382/overview",
+            "platform": "sport80",
+            "meet_id": "14382",
+            "pattern": "v/meets"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "Junior National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14380/overview",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14380/overview",
+            "platform": "sport80",
+            "meet_id": "14380",
+            "pattern": "v/meets"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "Youth National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14378/overview",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14378/overview",
+            "platform": "sport80",
+            "meet_id": "14378",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "adaptive_athlete_info": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive National Championships Registration",
+          "link_text": "is available here.",
+          "url": "https://www.usaweightlifting.org/resources/qualifying-totals/adaptive-athlete-competition-requirements",
+          "info_type": "adaptive_athlete_info",
+          "status": "available"
+        }
+      ],
+      "adaptive_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14373/overview",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14373/overview",
+            "platform": "sport80",
+            "meet_id": "14373",
+            "pattern": "v/meets"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive U25 National Championships",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14383/overview",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14383/overview",
+            "platform": "sport80",
+            "meet_id": "14383",
+            "pattern": "v/meets"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Junior National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14381/overview",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14381/overview",
+            "platform": "sport80",
+            "meet_id": "14381",
+            "pattern": "v/meets"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Youth National Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14379/overview",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14379/overview",
+            "platform": "sport80",
+            "meet_id": "14379",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "wso_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Mountain North WSO Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14473/overview",
+          "info_type": "wso_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14473/overview",
+            "platform": "sport80",
+            "meet_id": "14473",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "edit_entry": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Edit Entry",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt56b52f28af9cd494/681e5033c4a37710c71ac041/How_to_Edit_Member_Entries_-_USAW_Infographic_(1).pdf",
+          "info_type": "edit_entry",
+          "status": "available"
+        }
+      ],
+      "tickets": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Tickets",
+          "link_text": "View",
+          "url": "https://www.usaweightlifting.org/tickets",
+          "info_type": "tickets",
+          "status": "available"
+        }
+      ],
+      "hotel": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Hilton Garden Inn COS Downtown",
+          "url": "https://www.hilton.com/en/book/reservation/rooms/?ctyhocn=COSGIGI&arrivalDate=2026-06-17&departureDate=2026-06-29&groupCode=USAW26&room1NumAdults=1&cid=OM%2CWW%2CHILTONLINK%2CEN%2CDirectLink",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Element",
+          "url": "https://www.marriott.com/event-reservations/reservation-link.mi?id=1769717428108&key=GRP&app=resvlink&_branch_match_id=1333889948292743459&_branch_referrer=H4sIAAAAAAAAA8soKSkottLXTywo0MtNLCrKzC8p0UvOz9UvSi3OyczLtgdK2ALZZSCOWmaKraG5maW5obmJkYWhgYVadmqlrXtQgFpdUWpaKlB3Xnp8UlF%2BeXFqka1zRlF%2BbioA7pOtaGAAAAA%3D",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "SpringHill Suites",
+          "url": "https://www.marriott.com/event-reservations/reservation-link.mi?id=1769717129091&key=GRP&app=resvlink&_branch_match_id=1333889948292743459&_branch_referrer=H4sIAAAAAAAAA8soKSkottLXTywo0MtNLCrKzC8p0UvOz9UvSi3OyczLtgdK2ALZZSCOWmaKraG5maW5obmhkaWBpaFadmqlrXtQgFpdUWpaKlB3Xnp8UlF%2BeXFqka1zRlF%2BbioA%2FXsb%2BmAAAAA%3D",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Hilton Garden Inn North COS North Air Force Academy",
+          "url": "https://www.hilton.com/en/book/reservation/rooms/?ctyhocn=COSCHGI&arrivalDate=2026-06-17&departureDate=2026-06-29&groupCode=91G&room1NumAdults=1&cid=OM%2CWW%2CHILTONLINK%2CEN%2CDirectLink",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Homewood Suites by Hilton",
+          "url": "https://www.hilton.com/en/book/reservation/rooms/?ctyhocn=COSNOHW&arrivalDate=2026-06-17&departureDate=2026-06-29&groupCode=CHW90W&room1NumAdults=1&cid=OM%2CWW%2CHILTONLINK%2CEN%2CDirectLink",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "805-844-1999",
+          "url": "tel:805-844-1999",
+          "info_type": "hotel",
+          "status": "available"
+        }
+      ],
+      "photo_packages": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preorder Photo Packages",
+          "link_text": "View",
+          "url": "https://www.lifting.life/preorder",
+          "info_type": "photo_packages",
+          "status": "available"
+        }
+      ],
+      "preliminary_schedule": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preliminary Schedule",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt7b3763235e6b397c/6a111b3ad7617bb684580901/2026_-_NCW_-_Preliminary_Schedule.pdf",
+          "info_type": "preliminary_schedule",
+          "status": "available"
+        }
+      ],
+      "final_schedule": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Final Schedule",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt1726e18a18e358a7/6a2b25939d6b6c5d61adf810/schedule.pdf",
+          "info_type": "final_schedule",
+          "status": "available"
+        }
+      ],
+      "start_list": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Start List",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt4db01b71887cabae/6a349429afce3283515ddf79/June_18_Nationals_start-list_(2).pdf",
+          "info_type": "start_list",
+          "status": "available"
+        }
+      ],
+      "full_results": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Full Results",
+          "link_text": "View",
+          "url": "https://drive.google.com/drive/folders/14ncrwEnqErUKGomckAdG_LOT0qEbRomI?usp=sharing",
+          "info_type": "full_results",
+          "status": "available"
+        }
+      ],
+      "media_credentials": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "Please click here to submit your information to NCSI and start your background check",
+          "url": "https://usaweightliftingauxiliaryscreens.quickapp.pro/apply/applicant/start?_ref=qap_session_1f5087070be887ddd47e375569d4c4ad03d54628465f38e6472d3ab9e774adb1",
+          "info_type": "media_credentials",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/1fnfSaaIs3Fx4Dc-q9QguSacQQc40BamnuhiuPWrSqbA/viewform?edit_requested=true#responses",
+          "info_type": "media_credentials",
+          "status": "available"
+        }
+      ],
+      "training_sites": [
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "El Pomar Sports Center, one block from Ed Robson Arena",
+          "url": "https://maps.app.goo.gl/ywrxS7c3sh1utJQA9",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "Please click to secure your training times",
+          "url": "https://www.signupgenius.com/index.cfm?go=s.signup&urlid=60B0948A9A92CA5FF2-64342463-2026&useFullSite=true#/",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "Colorado Weightlifting Club",
+          "url": "https://www.coloradoweightlifting.com/",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "Vardanian Weightlifting",
+          "url": "https://vardanianweightlifting.com/",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "Vardanianweightlifting@yahoo.com",
+          "url": "mailto:Vardanianweightlifting@yahoo.com",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "TRAINING HALL",
+          "h3_header": "",
+          "link_text": "Pinnacle Weightlifting",
+          "url": "https://pinnacleweightliftingclub.com/",
+          "info_type": "training_sites",
+          "status": "available"
+        }
+      ],
+      "become_member": [
+        {
+          "h2_section": "Membership & Clubs",
+          "h3_header": "",
+          "link_text": "Become a Member",
+          "url": "https://www.usaweightlifting.org/Join-USAWeightlifting",
+          "info_type": "become_member",
+          "status": "available"
+        }
+      ],
+      "helpful_links": [
+        {
+          "h2_section": "",
+          "h3_header": "",
+          "link_text": "Visit Colorado Springs",
+          "url": "https://www.visitcos.com/",
+          "info_type": "helpful_links",
+          "status": "available"
+        },
+        {
+          "h2_section": "",
+          "h3_header": "",
+          "link_text": "City of Colorado Springs",
+          "url": "https://coloradosprings.gov/olympiccityusa",
+          "info_type": "helpful_links",
+          "status": "available"
+        },
+        {
+          "h2_section": "",
+          "h3_header": "",
+          "link_text": "Colorado Springs Airport",
+          "url": "https://coloradosprings.gov/flycos",
+          "info_type": "helpful_links",
+          "status": "available"
+        }
+      ]
+    },
+    "unclassified": [],
+    "total_links": 44,
+    "classified_count": 44,
+    "unclassified_count": 0
+  },
+  "2026 VIRUS Weightlifting Series 1": {
+    "source_url": "https://www.usaweightlifting.org/2026-virus-weightlifting-series-1",
+    "title": "2026 VIRUS Weightlifting Series 1",
+    "dates_raw": "Mar 5, 2026 - Mar 8, 2026",
+    "venue_raw": "Greater Columbus Convention Center",
+    "location_raw": "Columbus, OH, United States",
+    "metadata": {
+      "dates": "March 5",
+      "qualification_period": "February 5, 2025 \u2013 February 5, 2026",
+      "registration_opens": "at 12:01 a.m. MT, November 1, 2025",
+      "schedule_milestones": {
+        "preliminary_schedule_released": "February 7, 2026 - 2:00 p.m. MT",
+        "verification_final_entries": "February 23, 2026 - 10:00-10:30 a.m. MT |",
+        "final_schedule_released": "February 25, 2026 - 2:00 p.m. MT",
+        "registration_closes": "February 19, 2026 - 2:00 p.m. MT"
+      }
+    },
+    "info_by_type": {
+      "event_policy": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Event Calendars",
+          "url": "https://www.usaweightlifting.org/events",
+          "info_type": "event_policy",
+          "status": "available"
+        },
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events Policies",
+          "url": "https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules",
+          "info_type": "event_policy",
+          "status": "available"
+        }
+      ],
+      "schedule_announcement": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events",
+          "url": "https://www.usaweightlifting.org/national-events",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        },
+        {
+          "h2_section": "ROGUE STAGE",
+          "h3_header": "2026 USA Weightlifting National Event Schedule",
+          "link_text": "2026 USA Weightlifting National Event ScheduleUSAW will visit the great states of Ohio, Utah, Texas, Colorado and California in 2026Aug 1, 2025",
+          "url": "https://www.usaweightlifting.org/news/2025/august/01/2026-usa-weightlifting-national-event-schedule",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        }
+      ],
+      "qualifying_totals": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "2026 Qualifying Totals",
+          "url": "https://www.usaweightlifting.org/2026-usa-weightlifting-national-event-qualifying-totals",
+          "info_type": "qualifying_totals",
+          "status": "available"
+        }
+      ],
+      "event_guide": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Sanction YourEvent",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltd5de9851be8e33a4/6579dadd7cf4a94fa4f5dcba/updated_links_-_hosting_a_usa_weightlifting_sanctioned_event_2023.pdf",
+          "info_type": "event_guide",
+          "status": "available"
+        }
+      ],
+      "live_stream": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Watch Live",
+          "url": "https://www.usaweightlifting.org/live",
+          "info_type": "live_stream",
+          "status": "available"
+        }
+      ],
+      "registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14353",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14353",
+            "platform": "sport80",
+            "meet_id": "14353",
+            "pattern": "public/wizard"
+          }
+        }
+      ],
+      "adaptive_athlete_info": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Athlete Registration",
+          "link_text": "is available here.",
+          "url": "https://www.usaweightlifting.org/resources/qualifying-totals/adaptive-athlete-competition-requirements",
+          "info_type": "adaptive_athlete_info",
+          "status": "available"
+        }
+      ],
+      "adaptive_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Athlete Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14354",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14354",
+            "platform": "sport80",
+            "meet_id": "14354",
+            "pattern": "public/wizard"
+          }
+        }
+      ],
+      "start_list": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Entry List",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/events/14353/entries/21233?bl=wizard",
+          "info_type": "start_list",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/events/14353/entries/21233?bl=wizard",
+            "platform": "sport80",
+            "meet_id": "14353",
+            "entry_id": "21233",
+            "pattern": "public/events"
+          }
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Start List",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltcb82309c119d5a9a/69a86b34d350401b2ae4c89b/March_4_start-list_(1).pdf",
+          "info_type": "start_list",
+          "status": "available"
+        }
+      ],
+      "edit_entry": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Edit Entry",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt56b52f28af9cd494/681e5033c4a37710c71ac041/How_to_Edit_Member_Entries_-_USAW_Infographic_(1).pdf",
+          "info_type": "edit_entry",
+          "status": "available"
+        }
+      ],
+      "tickets": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Tickets",
+          "link_text": "View",
+          "url": "https://www.arnoldsports.com/tickets/",
+          "info_type": "tickets",
+          "status": "available"
+        }
+      ],
+      "hotel": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "View",
+          "url": "https://book.passkey.com/gt/220838544?gtid=e30944cb711835c1b59f222ce2776f94",
+          "info_type": "hotel",
+          "status": "available"
+        }
+      ],
+      "photo_packages": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preorder Photo Packages",
+          "link_text": "View",
+          "url": "https://www.lifting.life/preorder",
+          "info_type": "photo_packages",
+          "status": "available"
+        }
+      ],
+      "preliminary_schedule": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preliminary Schedule",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt79f72e0801fb072f/6987896bb7bf25825f6df479/2026_-_VWS1_-_Preliminary_Schedule.pdf",
+          "info_type": "preliminary_schedule",
+          "status": "available"
+        }
+      ],
+      "final_schedule": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Medal Schedules",
+          "link_text": "Medal Schedule by Category",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt9fdbf0715dbab35b/69a64115716ab87486442ae5/2026_-_VWS1_-_Medal_Schedule_by_Category.pdf",
+          "info_type": "final_schedule",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Medal Schedules",
+          "link_text": "Medal Schedule by Ceremony Time",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt0601f16e0f022c3f/69a64115f902d80c2b29c088/2026_-_VWS1_-_Medal_Schedule_by_Ceremony_Time.pdf",
+          "info_type": "final_schedule",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Final Schedule",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt6f8784987e72f262/69a75a4717af2a418430d942/March_3_schedule.pdf",
+          "info_type": "final_schedule",
+          "status": "available"
+        }
+      ],
+      "full_results": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Full Results",
+          "link_text": "View",
+          "url": "https://drive.google.com/drive/folders/1QtBcE-JuPc2Z9tijY0nRKDZhGDtNACjN",
+          "info_type": "full_results",
+          "status": "available"
+        }
+      ],
+      "media_credentials": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/1fnfSaaIs3Fx4Dc-q9QguSacQQc40BamnuhiuPWrSqbA/viewform?edit_requested=true#responses",
+          "info_type": "media_credentials",
+          "status": "available"
+        }
+      ],
+      "training_sites": [
+        {
+          "h2_section": "ROGUE STAGE",
+          "h3_header": "",
+          "link_text": "https://crossfitclintonville.sites.zenplanner.com/sign-up-now.cfm",
+          "url": "https://urldefense.com/v3/__https://crossfitclintonville.sites.zenplanner.com/sign-up-now.cfm__;!!EsN5QLU!JdgvFpfj5Bjp0VdKOYQ3BgQ-KwDBdjZjlTMTxgul3iVxxNgXQ2mpSJTLI_rPteQAy3cFXg9QhCaUxA2JUldKdZxggFx958_JQLaMUg$",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "ROGUE STAGE",
+          "h3_header": "",
+          "link_text": "https://www.project-lift.org/contact",
+          "url": "https://urldefense.com/v3/__https://www.project-lift.org/contact__;!!EsN5QLU!JdgvFpfj5Bjp0VdKOYQ3BgQ-KwDBdjZjlTMTxgul3iVxxNgXQ2mpSJTLI_rPteQAy3cFXg9QhCaUxA2JUldKdZxggFx9588OPHhBtA$",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "ROGUE STAGE",
+          "h3_header": "",
+          "link_text": "https://www.steadfastbarbell.com/contact-us",
+          "url": "https://urldefense.com/v3/__https://www.steadfastbarbell.com/contact-us__;!!EsN5QLU!JdgvFpfj5Bjp0VdKOYQ3BgQ-KwDBdjZjlTMTxgul3iVxxNgXQ2mpSJTLI_rPteQAy3cFXg9QhCaUxA2JUldKdZxggFx958_lh_eKLg$",
+          "info_type": "training_sites",
+          "status": "available"
+        },
+        {
+          "h2_section": "ROGUE STAGE",
+          "h3_header": "",
+          "link_text": "https://www.columbusweightlifting.org/pages/contact-us",
+          "url": "https://urldefense.com/v3/__https://www.columbusweightlifting.org/pages/contact-us__;!!EsN5QLU!JdgvFpfj5Bjp0VdKOYQ3BgQ-KwDBdjZjlTMTxgul3iVxxNgXQ2mpSJTLI_rPteQAy3cFXg9QhCaUxA2JUldKdZxggFx958-PCIe8vA$",
+          "info_type": "training_sites",
+          "status": "available"
+        }
+      ],
+      "become_member": [
+        {
+          "h2_section": "Membership & Clubs",
+          "h3_header": "",
+          "link_text": "Become a Member",
+          "url": "https://www.usaweightlifting.org/Join-USAWeightlifting",
+          "info_type": "become_member",
+          "status": "available"
+        }
+      ]
+    },
+    "unclassified": [],
+    "total_links": 27,
+    "classified_count": 27,
+    "unclassified_count": 0
+  },
+  "2026 Masters + University Nationals": {
+    "source_url": "https://www.usaweightlifting.org/2026-masters-national-championships-national-university-championships",
+    "title": "2026 Masters National Championships & National University Championships",
+    "dates_raw": "Apr 9, 2026 - Apr 12, 2026",
+    "venue_raw": "Salt Palace Convention Center",
+    "location_raw": "Salt Lake City, UT, United States",
+    "metadata": {
+      "dates": "April 9",
+      "qualification_period": "March 12, 2025 \u2013 March 12, 2026",
+      "registration_opens": "January 1, 2026 - 2:00 p.m. MT",
+      "registration_fees": {
+        "early_bird": {
+          "fee": "$145",
+          "closes": "February 26, 2026 - 2:00 p.m. MT"
+        },
+        "regular": {
+          "fee": "$175",
+          "closes": "March 12, 2026 - 2:00 p.m. MT"
+        },
+        "late": {
+          "fee": "$375",
+          "closes": "March 26, 2026 - 2:00 p.m. MT"
+        }
+      },
+      "schedule_milestones": {
+        "preliminary_schedule_released": "March 14, 2026 - 2:00 p.m. MT",
+        "verification_final_entries": "March 30, 2026 - 10:00-10:30 a.m. MT",
+        "final_schedule_released": "April 1, 2026 - 2:00 p.m. MT"
+      }
+    },
+    "info_by_type": {
+      "event_policy": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Event Calendars",
+          "url": "https://www.usaweightlifting.org/events",
+          "info_type": "event_policy",
+          "status": "available"
+        },
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events Policies",
+          "url": "https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules",
+          "info_type": "event_policy",
+          "status": "available"
+        }
+      ],
+      "schedule_announcement": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events",
+          "url": "https://www.usaweightlifting.org/national-events",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        },
+        {
+          "h2_section": "Related",
+          "h3_header": "2026 USA Weightlifting National Event Schedule",
+          "link_text": "2026 USA Weightlifting National Event ScheduleUSAW will visit the great states of Ohio, Utah, Texas, Colorado and California in 2026Aug 1, 2025",
+          "url": "https://www.usaweightlifting.org/news/2025/august/01/2026-usa-weightlifting-national-event-schedule",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        }
+      ],
+      "qualifying_totals": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "2026 Qualifying Totals",
+          "url": "https://www.usaweightlifting.org/2026-usa-weightlifting-national-event-qualifying-totals",
+          "info_type": "qualifying_totals",
+          "status": "available"
+        }
+      ],
+      "event_guide": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Sanction YourEvent",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltd5de9851be8e33a4/6579dadd7cf4a94fa4f5dcba/updated_links_-_hosting_a_usa_weightlifting_sanctioned_event_2023.pdf",
+          "info_type": "event_guide",
+          "status": "available"
+        }
+      ],
+      "live_stream": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Watch Live",
+          "url": "https://www.usaweightlifting.org/live",
+          "info_type": "live_stream",
+          "status": "available"
+        }
+      ],
+      "registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "University Nationals Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14333/home",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14333/home",
+            "platform": "sport80",
+            "meet_id": "14333",
+            "pattern": "public/wizard"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "Masters Nationals Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14336/home",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14336/home",
+            "platform": "sport80",
+            "meet_id": "14336",
+            "pattern": "public/wizard"
+          }
+        }
+      ],
+      "adaptive_athlete_info": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "ADAPTIVE ATHLETES - University Nationals Registration",
+          "link_text": "is available here.",
+          "url": "https://www.usaweightlifting.org/resources/qualifying-totals/adaptive-athlete-competition-requirements",
+          "info_type": "adaptive_athlete_info",
+          "status": "available"
+        }
+      ],
+      "adaptive_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "ADAPTIVE ATHLETES - University Nationals Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14338/home",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14338/home",
+            "platform": "sport80",
+            "meet_id": "14338",
+            "pattern": "public/wizard"
+          }
+        },
+        {
+          "h2_section": "Registration",
+          "h3_header": "ADAPTIVE ATHLETES - Masters Nationals Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14337/home",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14337/home",
+            "platform": "sport80",
+            "meet_id": "14337",
+            "pattern": "public/wizard"
+          }
+        }
+      ],
+      "team_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Team Registration - University Nationals",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/e/1FAIpQLScz1NIwYlkje5zXLOumfeZj5lQ_a-Ntk0rsyk-MTyw8LemQtQ/viewform",
+          "info_type": "team_registration",
+          "status": "available"
+        }
+      ],
+      "wso_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Mountain South WSO Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14473/overview",
+          "info_type": "wso_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14473/overview",
+            "platform": "sport80",
+            "meet_id": "14473",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "edit_entry": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Edit Entry",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt56b52f28af9cd494/681e5033c4a37710c71ac041/How_to_Edit_Member_Entries_-_USAW_Infographic_(1).pdf",
+          "info_type": "edit_entry",
+          "status": "available"
+        }
+      ],
+      "tickets": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Tickets",
+          "link_text": "View",
+          "url": "https://www.usaweightlifting.org/tickets",
+          "info_type": "tickets",
+          "status": "available"
+        }
+      ],
+      "hotel": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Hilton Salt Lake City Center",
+          "url": "https://book.passkey.com/event/51155531/owner/1422/home",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Hyatt Regency",
+          "url": "https://www.hyatt.com/events/en-US/group-booking/SLCRS/G-LJKH",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Hilton Garden Inn Salt Lake City Downtown",
+          "url": "https://www.hilton.com/en/book/reservation/rooms/?ctyhocn=SLCDWGI&arrivalDate=2026-04-07&departureDate=2026-04-12&groupCode=92Y&room1NumAdults=1&cid=OM%2CWW%2CHILTONLINK%2CEN%2CDirectLink",
+          "info_type": "hotel",
+          "status": "available"
+        }
+      ],
+      "photo_packages": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preorder Photo Packages",
+          "link_text": "View",
+          "url": "https://www.lifting.life/preorder",
+          "info_type": "photo_packages",
+          "status": "available"
+        }
+      ],
+      "preliminary_schedule": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preliminary Schedule",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt30b5712ccf8b2ef6/69b5796ffe61b81ee242b7a6/2026_-_MN_&_NUC_-_Preliminary_Schedule_(1).pdf",
+          "info_type": "preliminary_schedule",
+          "status": "available"
+        }
+      ],
+      "final_schedule": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Final Schedule",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltc7f5de0fd9b2e2fb/69d51b200744a4178256c6f7/2026_-_Master_&_Uni_-_Final_Schedule_OWLCMS.pdf",
+          "info_type": "final_schedule",
+          "status": "available"
+        }
+      ],
+      "start_list": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Start List",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltc95a5ea498928db9/69d51b201716e75d348b147b/2026_-_Master_&_Uni_-_Start_List_OWLCMS.pdf",
+          "info_type": "start_list",
+          "status": "available"
+        }
+      ],
+      "full_results": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Full Results & Medal Schedule",
+          "link_text": "View",
+          "url": "https://drive.google.com/drive/folders/1D5-iyB8mfeppFYkIcQWu0AWnEYX-Dx8L",
+          "info_type": "full_results",
+          "status": "available"
+        }
+      ],
+      "media_credentials": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "Please click here to submit your information to NCSI and start your background check",
+          "url": "https://usaweightliftingauxiliaryscreens.quickapp.pro/apply/applicant/start?_ref=qap_session_1f5087070be887ddd47e375569d4c4ad03d54628465f38e6472d3ab9e774adb1",
+          "info_type": "media_credentials",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/1fnfSaaIs3Fx4Dc-q9QguSacQQc40BamnuhiuPWrSqbA/viewform?edit_requested=true#responses",
+          "info_type": "media_credentials",
+          "status": "available"
+        }
+      ],
+      "become_member": [
+        {
+          "h2_section": "Membership & Clubs",
+          "h3_header": "",
+          "link_text": "Become a Member",
+          "url": "https://www.usaweightlifting.org/Join-USAWeightlifting",
+          "info_type": "become_member",
+          "status": "available"
+        }
+      ]
+    },
+    "unclassified": [],
+    "total_links": 27,
+    "classified_count": 27,
+    "unclassified_count": 0
+  },
+  "2026 VIRUS Weightlifting Series 2": {
+    "source_url": "https://www.usaweightlifting.org/2026-virus-weightlifting-series-2-championships",
+    "title": "2026 VIRUS Weightlifting Series 2 Championships",
+    "dates_raw": "Sep 10, 2026 - Sep 13, 2026",
+    "venue_raw": "Fort Worth Convention Center",
+    "location_raw": "Fort Worth, TX, United States",
+    "metadata": {
+      "dates": "September 10",
+      "qualification_period": "August 13, 2025 \u2013 August 13, 2026",
+      "registration_opens": "January 1, 2026 - 2:00 p.m. MT",
+      "registration_fees": {
+        "early_bird": {
+          "fee": "$145",
+          "closes": "July 30, 2026 - 2:00 p.m. MT"
+        },
+        "regular": {
+          "fee": "$175",
+          "closes": "August 13, 2026 - 2:00 p.m. MT"
+        },
+        "late": {
+          "fee": "$375",
+          "closes": "August 27, 2026 - 2:00 p.m. MT"
+        }
+      },
+      "schedule_milestones": {
+        "preliminary_schedule_released": "August 15, 2026 - 2:00 p.m. MT",
+        "verification_final_entries": "August 31, 2026 - 10:00-10:30 a.m. MT",
+        "final_schedule_released": "September 2, 2026 - 2:00 p.m. MT"
+      }
+    },
+    "info_by_type": {
+      "event_policy": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Event Calendars",
+          "url": "https://www.usaweightlifting.org/events",
+          "info_type": "event_policy",
+          "status": "available"
+        },
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events Policies",
+          "url": "https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules",
+          "info_type": "event_policy",
+          "status": "available"
+        }
+      ],
+      "schedule_announcement": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events",
+          "url": "https://www.usaweightlifting.org/national-events",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        },
+        {
+          "h2_section": "Related",
+          "h3_header": "2026 USA Weightlifting National Event Schedule",
+          "link_text": "2026 USA Weightlifting National Event ScheduleUSAW will visit the great states of Ohio, Utah, Texas, Colorado and California in 2026Aug 1, 2025",
+          "url": "https://www.usaweightlifting.org/news/2025/august/01/2026-usa-weightlifting-national-event-schedule",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        }
+      ],
+      "qualifying_totals": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "2026 Qualifying Totals",
+          "url": "https://www.usaweightlifting.org/2026-usa-weightlifting-national-event-qualifying-totals",
+          "info_type": "qualifying_totals",
+          "status": "available"
+        }
+      ],
+      "event_guide": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Sanction YourEvent",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltd5de9851be8e33a4/6579dadd7cf4a94fa4f5dcba/updated_links_-_hosting_a_usa_weightlifting_sanctioned_event_2023.pdf",
+          "info_type": "event_guide",
+          "status": "available"
+        }
+      ],
+      "live_stream": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Watch Live",
+          "url": "https://www.usaweightlifting.org/live",
+          "info_type": "live_stream",
+          "status": "available"
+        }
+      ],
+      "registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14508/overview",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14508/overview",
+            "platform": "sport80",
+            "meet_id": "14508",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "adaptive_athlete_info": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Athlete Registration",
+          "link_text": "is available here.",
+          "url": "https://www.usaweightlifting.org/resources/qualifying-totals/adaptive-athlete-competition-requirements",
+          "info_type": "adaptive_athlete_info",
+          "status": "available"
+        }
+      ],
+      "adaptive_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Athlete Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14509/overview",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14509/overview",
+            "platform": "sport80",
+            "meet_id": "14509",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "wso_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Texas-Oklahoma WSO Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14530/overview",
+          "info_type": "wso_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14530/overview",
+            "platform": "sport80",
+            "meet_id": "14530",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "edit_entry": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Edit Entry",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt56b52f28af9cd494/681e5033c4a37710c71ac041/How_to_Edit_Member_Entries_-_USAW_Infographic_(1).pdf",
+          "info_type": "edit_entry",
+          "status": "available"
+        }
+      ],
+      "tickets": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Tickets",
+          "link_text": "View",
+          "url": "https://www.usaweightlifting.org/tickets",
+          "info_type": "tickets",
+          "status": "available"
+        }
+      ],
+      "hotel": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Hilton Fort Worth",
+          "url": "https://www.hilton.com/en/book/reservation/rooms/?ctyhocn=FTWFWHF&arrivalDate=2026-09-09&departureDate=2026-09-14&groupCode=92B&room1NumAdults=1&cid=OM%2CWW%2CHILTONLINK%2CEN%2CDirectLink",
+          "info_type": "hotel",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Fairfield by Marriott",
+          "url": "https://www.marriott.com/event-reservations/reservation-link.mi?id=1774379543324&key=GRP&app=resvlink&_branch_match_id=1550547305028214372&_branch_referrer=H4sIAAAAAAAAA8soKSkottLXTywo0MtNLCrKzC8p0UvOz9UvSi3OyczLtgdK2ALZZSCOWmaKraG5uYmxuaWpibGxkYladmqlrXtQgFpdUWpaKlB3Xnp8UlF%2BeXFqka1zRlF%2BbioA6bsEBGAAAAA%3D",
+          "info_type": "hotel",
+          "status": "available"
+        }
+      ],
+      "photo_packages": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preorder Photo Packages",
+          "link_text": "View",
+          "url": "https://www.lifting.life/preorder",
+          "info_type": "photo_packages",
+          "status": "available"
+        }
+      ],
+      "media_credentials": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "Please click here to submit your information to NCSI and start your background check",
+          "url": "https://usaweightliftingauxiliaryscreens.quickapp.pro/apply/applicant/start?_ref=qap_session_1f5087070be887ddd47e375569d4c4ad03d54628465f38e6472d3ab9e774adb1",
+          "info_type": "media_credentials",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/1fnfSaaIs3Fx4Dc-q9QguSacQQc40BamnuhiuPWrSqbA/viewform?edit_requested=true#responses",
+          "info_type": "media_credentials",
+          "status": "available"
+        }
+      ],
+      "become_member": [
+        {
+          "h2_section": "Membership & Clubs",
+          "h3_header": "",
+          "link_text": "Become a Member",
+          "url": "https://www.usaweightlifting.org/Join-USAWeightlifting",
+          "info_type": "become_member",
+          "status": "available"
+        }
+      ]
+    },
+    "unclassified": [],
+    "total_links": 19,
+    "classified_count": 19,
+    "unclassified_count": 0
+  },
+  "2026 VIRUS Weightlifting Finals": {
+    "source_url": "https://www.usaweightlifting.org/2026-virus-weightlifting-finals",
+    "title": "2026 VIRUS Weightlifting Finals",
+    "dates_raw": "Dec 3, 2026 - Dec 6, 2026",
+    "venue_raw": "Alameda County Fairgrounds",
+    "location_raw": "Pleasanton, CA, United States",
+    "metadata": {
+      "dates": "December 3",
+      "qualification_period": "November 5, 2025 \u2013 November 5, 2026",
+      "registration_opens": "January 1, 2026 - 2:00 p.m. MT",
+      "registration_fees": {
+        "early_bird": {
+          "fee": "$145",
+          "closes": "October 22, 2026 - 2:00 p.m. MT"
+        },
+        "regular": {
+          "fee": "$175",
+          "closes": "November 5, 2026 - 2:00 p.m. MT"
+        },
+        "late": {
+          "fee": "$375",
+          "closes": "November 19, 2026 - 2:00 p.m. MT"
+        }
+      },
+      "schedule_milestones": {
+        "preliminary_schedule_released": "November 7, 2026 - 2:00 p.m. MT",
+        "verification_final_entries": "November 23, 2026 - 10:00-10:30 a.m. MT",
+        "final_schedule_released": "November 25, 2026 - 2:00 p.m. MT"
+      }
+    },
+    "info_by_type": {
+      "event_policy": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Event Calendars",
+          "url": "https://www.usaweightlifting.org/events",
+          "info_type": "event_policy",
+          "status": "available"
+        },
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events Policies",
+          "url": "https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules",
+          "info_type": "event_policy",
+          "status": "available"
+        }
+      ],
+      "schedule_announcement": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events",
+          "url": "https://www.usaweightlifting.org/national-events",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        },
+        {
+          "h2_section": "Related",
+          "h3_header": "2026 USA Weightlifting National Event Schedule",
+          "link_text": "2026 USA Weightlifting National Event ScheduleUSAW will visit the great states of Ohio, Utah, Texas, Colorado and California in 2026Aug 1, 2025",
+          "url": "https://www.usaweightlifting.org/news/2025/august/01/2026-usa-weightlifting-national-event-schedule",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        }
+      ],
+      "qualifying_totals": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "2026 Qualifying Totals",
+          "url": "https://www.usaweightlifting.org/2026-usa-weightlifting-national-event-qualifying-totals",
+          "info_type": "qualifying_totals",
+          "status": "available"
+        }
+      ],
+      "event_guide": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Sanction YourEvent",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltd5de9851be8e33a4/6579dadd7cf4a94fa4f5dcba/updated_links_-_hosting_a_usa_weightlifting_sanctioned_event_2023.pdf",
+          "info_type": "event_guide",
+          "status": "available"
+        }
+      ],
+      "live_stream": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Watch Live",
+          "url": "https://www.usaweightlifting.org/live",
+          "info_type": "live_stream",
+          "status": "available"
+        }
+      ],
+      "registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14510/stage/21402",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14510/stage/21402",
+            "platform": "sport80",
+            "meet_id": "14510",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "adaptive_athlete_info": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Athlete Registration",
+          "link_text": "is available here.",
+          "url": "https://www.usaweightlifting.org/resources/qualifying-totals/adaptive-athlete-competition-requirements",
+          "info_type": "adaptive_athlete_info",
+          "status": "available"
+        }
+      ],
+      "adaptive_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Adaptive Athlete Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14511/overview",
+          "info_type": "adaptive_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14511/overview",
+            "platform": "sport80",
+            "meet_id": "14511",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "wso_registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "California North WSO Championships Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14678/overview",
+          "info_type": "wso_registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/v/808740/e/meets/14678/overview",
+            "platform": "sport80",
+            "meet_id": "14678",
+            "pattern": "v/meets"
+          }
+        }
+      ],
+      "edit_entry": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Edit Entry",
+          "link_text": "View",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/blt56b52f28af9cd494/681e5033c4a37710c71ac041/How_to_Edit_Member_Entries_-_USAW_Infographic_(1).pdf",
+          "info_type": "edit_entry",
+          "status": "available"
+        }
+      ],
+      "tickets": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Tickets",
+          "link_text": "View",
+          "url": "https://www.usaweightlifting.org/tickets",
+          "info_type": "tickets",
+          "status": "available"
+        }
+      ],
+      "hotel": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Book a Hotel",
+          "link_text": "Booktoday",
+          "url": "https://www.hilton.com/en/attend-my-event/plepcdt-uss-26183810-bcf2-450d-ae3c-af6b4cfce865/",
+          "info_type": "hotel",
+          "status": "available"
+        }
+      ],
+      "photo_packages": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Preorder Photo Packages",
+          "link_text": "View",
+          "url": "https://www.lifting.life/preorder",
+          "info_type": "photo_packages",
+          "status": "available"
+        }
+      ],
+      "media_credentials": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "Please click here to submit your information to NCSI and start your background check",
+          "url": "https://usaweightliftingauxiliaryscreens.quickapp.pro/apply/applicant/start?_ref=qap_session_1f5087070be887ddd47e375569d4c4ad03d54628465f38e6472d3ab9e774adb1",
+          "info_type": "media_credentials",
+          "status": "available"
+        },
+        {
+          "h2_section": "Information",
+          "h3_header": "Media Credentials",
+          "link_text": "View",
+          "url": "https://docs.google.com/forms/d/1fnfSaaIs3Fx4Dc-q9QguSacQQc40BamnuhiuPWrSqbA/viewform?edit_requested=true#responses",
+          "info_type": "media_credentials",
+          "status": "available"
+        }
+      ],
+      "become_member": [
+        {
+          "h2_section": "Membership & Clubs",
+          "h3_header": "",
+          "link_text": "Become a Member",
+          "url": "https://www.usaweightlifting.org/Join-USAWeightlifting",
+          "info_type": "become_member",
+          "status": "available"
+        }
+      ]
+    },
+    "unclassified": [],
+    "total_links": 18,
+    "classified_count": 18,
+    "unclassified_count": 0
+  },
+  "2026 Wodapalooza SoCal": {
+    "source_url": "https://www.usaweightlifting.org/2026-usaw-x-gymreapers-wodapalooza-socal",
+    "title": "USAW x Gymreapers Wodapalooza SoCal",
+    "dates_raw": "Sep 25, 2026 - Sep 27, 2026",
+    "venue_raw": "Huntington Beach, CA, United States",
+    "location_raw": "",
+    "metadata": {},
+    "info_by_type": {
+      "event_policy": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Event Calendars",
+          "url": "https://www.usaweightlifting.org/events",
+          "info_type": "event_policy",
+          "status": "available"
+        },
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events Policies",
+          "url": "https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules",
+          "info_type": "event_policy",
+          "status": "available"
+        }
+      ],
+      "schedule_announcement": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "National Events",
+          "url": "https://www.usaweightlifting.org/national-events",
+          "info_type": "schedule_announcement",
+          "status": "available"
+        }
+      ],
+      "qualifying_totals": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "2026 Qualifying Totals",
+          "url": "https://www.usaweightlifting.org/2026-usa-weightlifting-national-event-qualifying-totals",
+          "info_type": "qualifying_totals",
+          "status": "available"
+        }
+      ],
+      "event_guide": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Sanction YourEvent",
+          "url": "https://assets.contentstack.io/v3/assets/blteb7d012fc7ebef7f/bltd5de9851be8e33a4/6579dadd7cf4a94fa4f5dcba/updated_links_-_hosting_a_usa_weightlifting_sanctioned_event_2023.pdf",
+          "info_type": "event_guide",
+          "status": "available"
+        }
+      ],
+      "live_stream": [
+        {
+          "h2_section": "Events",
+          "h3_header": "",
+          "link_text": "Watch Live",
+          "url": "https://www.usaweightlifting.org/live",
+          "info_type": "live_stream",
+          "status": "available"
+        }
+      ],
+      "registration": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Registration",
+          "link_text": "View",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14783/home",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14783/home",
+            "platform": "sport80",
+            "meet_id": "14783",
+            "pattern": "public/wizard"
+          }
+        },
+        {
+          "h2_section": "",
+          "h3_header": "",
+          "link_text": "All participants must register through Bars",
+          "url": "https://usaweightlifting.sport80.com/public/wizard/e/14783/home?_gl=1%2ayh5as8%2a_gcl_au%2aMTA3MzYzMjI2Ny4xNzc5MDM1Mjg3%2a_ga%2aNzc0NzQ2MDkyLjE3NzkwMzUyODY.%2a_ga_CS9HP9DMEJ%2aczE3NzkyMTgwODckbzkkZzEkdDE3NzkyMjExMDEkajEzJGwwJGgw",
+          "info_type": "registration",
+          "status": "available",
+          "sport80": {
+            "url": "https://usaweightlifting.sport80.com/public/wizard/e/14783/home?_gl=1%2ayh5as8%2a_gcl_au%2aMTA3MzYzMjI2Ny4xNzc5MDM1Mjg3%2a_ga%2aNzc0NzQ2MDkyLjE3NzkwMzUyODY.%2a_ga_CS9HP9DMEJ%2aczE3NzkyMTgwODckbzkkZzEkdDE3NzkyMjExMDEkajEzJGwwJGgw",
+            "platform": "sport80",
+            "meet_id": "14783",
+            "pattern": "public/wizard"
+          }
+        }
+      ],
+      "become_member": [
+        {
+          "h2_section": "Registration",
+          "h3_header": "Become a Member",
+          "link_text": "View",
+          "url": "https://www.usaweightlifting.org/Join-USAWeightlifting",
+          "info_type": "become_member",
+          "status": "available"
+        }
+      ],
+      "tickets": [
+        {
+          "h2_section": "Information",
+          "h3_header": "Tickets",
+          "link_text": "View",
+          "url": "https://socal.wodapalooza.com/",
+          "info_type": "tickets",
+          "status": "available"
+        }
+      ]
+    },
+    "unclassified": [],
+    "total_links": 10,
+    "classified_count": 10,
+    "unclassified_count": 0
+  }
+}
