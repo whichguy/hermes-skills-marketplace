@@ -1,0 +1,16 @@
+{
+  "id": "complaint", "version": 1, "start": "classify",
+  "states": {
+    "classify": { "prompt": "Classify this complaint. Reply as JSON {\"category\": ..., \"severity\": 1-5}:\n${in}" },
+    "research": { "prompt": "Our policy areas: refunds, replacements, apologies-only. Summarize in 3 bullets what policy allows for a '${$.classify.category}' complaint." },
+    "assess":   { "prompt": "Complaint: ${$.input.text}\nPolicy: ${$.research.result}\nSeverity: ${$.classify.severity}\nAssess what we should offer and state your evidence.",
+                  "routes": {
+                    "give_refund": {"to": "draft",   "means": "policy clearly allows a refund here"},
+                    "escalate":    {"to": "manager", "means": "high severity or policy is ambiguous"} }},
+    "manager":  { "ask": "Sev-${$.classify.severity} complaint, assessment: ${$.assess.recommend}. Refund anyway?",
+                  "options": ["refund", "reject"],
+                  "routes": {"refund": "draft", "reject": "@fail"} },
+    "draft":    { "prompt": "Write a short reply granting the refund. Complaint: ${$.input.text}. Assessment: ${$.assess.recommend}" },
+    "send":     { "run": "send_email" }
+  }
+}

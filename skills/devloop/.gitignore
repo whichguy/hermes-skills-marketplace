@@ -1,0 +1,10 @@
+# build/test caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# devloop runtime + debug output (traces, transcripts, checkpoints, results.json)
+# tool-owned, never committed. For real runs the same .devloop/ dir lives in the
+# target worktree and is hidden via the worktree's .git/info/exclude.
+.devloop/

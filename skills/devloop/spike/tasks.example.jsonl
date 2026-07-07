@@ -1,0 +1,8 @@
+# Replace with 5+ REAL multi-file tasks from your own projects (>=2 files each).
+# `touches` documents the expected cross-file span; `expect_human_review: true` for
+# deliberately under-specified requests that should trip the ambiguity gate.
+{"id": "t1", "repo": "/opt/data/projects/CHANGE_ME", "request": "add a rate limiter to the order API and wire it into the request middleware", "touches": ["api/orders.py", "api/middleware.py", "config.py"], "expect_human_review": false}
+{"id": "t2", "repo": "/opt/data/projects/CHANGE_ME", "request": "extract the retry logic into a shared helper and use it in both the email and webhook clients", "touches": ["clients/email.py", "clients/webhook.py", "util/retry.py"], "expect_human_review": false}
+{"id": "t3", "repo": "/opt/data/projects/CHANGE_ME", "request": "add pagination to the list endpoints and update the callers", "touches": ["api/list.py", "api/handlers.py", "tests/test_list.py"], "expect_human_review": false}
+{"id": "t4", "repo": "/opt/data/projects/CHANGE_ME", "request": "make the thing faster", "touches": [], "expect_human_review": true}
+{"id": "t5", "repo": "/opt/data/projects/CHANGE_ME", "request": "migrate the user store from JSON files to SQLite and update everything that reads it", "touches": ["store/users.py", "store/schema.sql", "api/auth.py"], "expect_human_review": false}

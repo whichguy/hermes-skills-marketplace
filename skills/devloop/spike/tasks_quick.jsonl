@@ -1,0 +1,7 @@
+# QUICK go-check suite (user decision 2026-07-01): 1 satisfiable modify task + 1 vague task,
+# 1 run each (~3-5 min total). Exercises the WHOLE spine — charter->refine->advisor->vague/ambiguity
+# gates->structured design->coder->judges->evidence->frozen-tests->whole-suite regression + the
+# harness's independent existing-suite check — plus the safety side (vague -> HUMAN_REVIEW).
+# The COMPREHENSIVE suite is spike/tasks_extended.jsonl (12 tasks x3, tiers.py spike-full).
+{"id": "q1-validate", "repo": "/opt/data/devloop-spike-sample", "request": "In the existing textutil.py, make normalize(s) raise ValueError on empty-or-None input (it currently assumes a non-empty string), and update its caller make_key in app.py so an empty label surfaces that ValueError instead of returning the bare prefix 'key-'.", "touches": ["textutil.py", "app.py"], "expect_human_review": false, "existing_suite": ["tests/test_textutil.py", "tests/test_email_client.py"]}
+{"id": "q2-vague", "repo": "/opt/data/devloop-spike-sample", "request": "Make the app faster.", "touches": [], "expect_human_review": true}

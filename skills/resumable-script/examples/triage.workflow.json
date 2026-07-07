@@ -1,0 +1,55 @@
+{
+  "id": "refund-triage",
+  "version": 1,
+  "start": "research",
+  "states": {
+    "research": {
+      "search": "${$.input.topic} refund policy",
+      "format": "structured",
+      "intent": "research the customer's topic",
+      "set": {
+        "$.top_url": "${$.research.results[0].url}"
+      },
+      "next": "summarise"
+    },
+    "summarise": {
+      "map": {
+        "over": "$.input.items",
+        "as": "it",
+        "do": {
+          "run": "summarise_item"
+        }
+      },
+      "reduce": {
+        "run": "tally"
+      },
+      "intent": "summarise each line item, then total",
+      "next": "assess"
+    },
+    "assess": {
+      "prompt": "Assess this refund for ${$.input.customer}. Research: ${$.top_url}. Items: ${$.summarise.labels}. total=${$.summarise.total}. Reply auto (total<=100) or review (total>100).",
+      "intent": "assess the refund",
+      "routes": {
+        "auto": "notify",
+        "review": "approve"
+      }
+    },
+    "approve": {
+      "options": [
+        "approve",
+        "deny"
+      ],
+      "intent": "human approval gate for large refunds",
+      "routes": {
+        "approve": "notify",
+        "deny": "@fail"
+      },
+      "ask": "Approve a ${$.summarise.total} refund for ${$.input.customer}?"
+    },
+    "notify": {
+      "run": "draft_notice",
+      "intent": "draft the confirmation",
+      "next": "@done"
+    }
+  }
+}

@@ -1,0 +1,63 @@
+# ============================================================
+# FAIL-CLOSED .gitignore for versioning a HERMES_HOME / config dir.
+# Ignore EVERYTHING at root, then allow-list only safe, version-worthy
+# paths. Nothing leaks by accident. Copy this and adjust the allow-list
+# to the actual layout you confirmed during recon.
+#
+# SAFE TO VERSION even in a PRIVATE repo: config (verify no inline
+#   secrets first), skills, wiki, scripts, cron job defs, memories.
+# NEVER COMMIT: .env, auth.json, OAuth tokens, databases, sessions,
+#   logs, pairing/whatsapp creds, personal-context. These are excluded
+#   by the /* rule AND must never be added back to the allow-list.
+# ============================================================
+/*
+
+# --- Allow-listed (safe to version) ---
+!/.gitignore
+!/README.md
+!/config.yaml
+!/SOUL.md
+!/docker-compose.yml
+!/skills/
+!/wiki/
+!/scripts/
+!/cron/
+!/memories/
+!/agent-hooks/
+
+# --- Re-exclude sensitive / bloat INSIDE allow-listed dirs ---
+# Skills: runtime telemetry, curator backups, archives, hub cache (can be 25MB+)
+skills/.curator_backups/
+skills/.archive/
+skills/.hub/
+skills/.usage.json
+skills/.usage.json.lock
+skills/**/__pycache__/
+
+# Cron: keep job defs + prompts, drop rotating backups & outputs
+cron/*.bak*
+cron/output/
+cron/**/__pycache__/
+
+# Memories: keep MEMORY.md + USER.md, drop backups + lockfiles
+memories/*.bak*
+memories/*.lock
+
+# Wiki / scripts: lockfiles and caches
+wiki/**/*.lock
+scripts/**/__pycache__/
+scripts/**/*.pyc
+
+# ============================================================
+# NEVER COMMITTED (already excluded by /*, listed for intent clarity):
+#   .env  .env.*            API keys & secrets
+#   auth.json  auth.lock    OAuth tokens / credential pool
+#   google_*.json           Google OAuth client secret + token
+#   channel_directory.json  chat IDs
+#   whatsapp/  pairing/      bridge session credentials
+#   state.db*  kanban.db*    live databases (huge, contain everything)
+#   sessions/  logs/         transcripts & logs
+#   personal-context/        relationship graph / audit log (private)
+#   *cache*  .cache  cache/  runtime caches
+#   hermes-agent/            upstream source (its own git repo)
+# ============================================================
