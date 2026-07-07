@@ -96,6 +96,35 @@ command:
 This applies to ANY edit that documents a command as the canonical way to do something, not just
 drift fixes. Inventing plausible commands is the doc equivalent of fabricating test output.
 
+## Fixture-based offline testing for web scrapers
+
+When a skill scrapes live web pages (via `requests` + `BeautifulSoup`), add
+offline mock tests so the suite runs without network:
+
+1. **Refactor the extractor** to accept an optional `html` parameter:
+   ```python
+   def extract_page(url: str, html: str | None = None) -> dict:
+       if html is None:
+           resp = requests.get(url, timeout=30)
+           html = resp.text
+       soup = BeautifulSoup(html, "html.parser")
+       # ... parse ...
+   ```
+   Backward compatible — live callers pass URL only, tests pass `html=fixture`.
+
+2. **Capture fixtures** from live pages: save each page's HTML to
+   `tests/fixtures/{slug}.html`. Add a `--refresh` flag to re-fetch when
+   pages change.
+
+3. **Mock test suite** (`scripts/test_mock.py`): loads fixture HTML, passes
+   to the refactored extractor, runs the same assertions as the live suite.
+
+4. **Benefits**: <1s runtime, zero network dependency, deterministic results,
+   CI-friendly. Live suite remains for catching page-structure changes.
+
+Real example: `usaw-event-info` skill — 11 fixtures, 11/11 tests pass in 0.39s
+offline vs ~3s with network. See `scripts/test_extractor_mock.py`.
+
 ## Guardrails (fail-closed)
 - Tests are **read-only / no network**; mocks only. Never hit live Google/WhatsApp.
 - Never commit secrets/tokens into fixtures.

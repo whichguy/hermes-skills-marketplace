@@ -9,7 +9,7 @@ Complete reference for SKILL.md frontmatter fields in the marketplace.
 | `name` | string | lowercase + hyphens, ≤64 chars | `wellness-finder` |
 | `description` | string | ≤1024 chars, starts with "Use when" | `"Use when finding wellness facilities."` |
 | `version` | string | semver (x.y.z) | `1.0.0` |
-| `author` | string | author name | `Jim Wiese` |
+| `author` | string | author name | `The User` |
 | `license` | string | SPDX identifier | `MIT` |
 | `platforms` | list | one or more of: linux, macos, windows | `[linux, macos, windows]` |
 

@@ -5,7 +5,7 @@ Goal: one consistent, pretty, Telegram-friendly house style across every
 script-only cron job. Import these helpers instead of hand-formatting each
 script so the look can be tuned in a single place.
 
-Deploy: copy into the deployment scripts dir (e.g. /opt/data/scripts/) so
+Deploy: copy into the deployment scripts dir (e.g. ${HERMES_HOME}/scripts/) so
 sibling cron scripts can ``import cron_style as cs``.
 
 Design rules:

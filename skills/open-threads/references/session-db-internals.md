@@ -36,7 +36,7 @@ This means deep links CANNOT be constructed from the session DB alone.
 
 ## Session Routing (sessions.json)
 
-Location: `/opt/data/sessions/sessions.json`
+Location: `${HERMES_HOME}/sessions/sessions.json`
 
 This is the **gateway routing index** — maps session keys to active session entries.
 Only contains **currently routed** sessions (~50 entries). Old sessions that were
@@ -151,7 +151,7 @@ The LLM step (skill or cron) cleans up the raw extraction into a readable action
 
 ## Dismissal Store
 
-Database: `/opt/data/open-threads.db`
+Database: `${HERMES_HOME}/open-threads.db`
 ```sql
 CREATE TABLE dismissed_sessions (
   session_id TEXT PRIMARY KEY,

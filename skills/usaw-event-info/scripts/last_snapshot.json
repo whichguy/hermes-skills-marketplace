@@ -12,15 +12,15 @@
       "registration_fees": {
         "early_bird": {
           "fee": "$145",
-          "closes": "May 7, 2026 - 2:00 p.m. MT"
+          "closes": ": May 7, 2026 - 2:00 p.m. MT"
         },
         "regular": {
           "fee": "$175",
-          "closes": "May 21, 2026 - 2:00 p.m. MT"
+          "closes": ": May 21, 2026 - 2:00 p.m. MT"
         },
         "late": {
           "fee": "$375",
-          "closes": "June 4, 2026 - 2:00 p.m. MT"
+          "closes": ": June 4, 2026 - 2:00 p.m. MT"
         }
       },
       "schedule_milestones": {
@@ -796,15 +796,15 @@
       "registration_fees": {
         "early_bird": {
           "fee": "$145",
-          "closes": "February 26, 2026 - 2:00 p.m. MT"
+          "closes": ": February 26, 2026 - 2:00 p.m. MT"
         },
         "regular": {
           "fee": "$175",
-          "closes": "March 12, 2026 - 2:00 p.m. MT"
+          "closes": ": March 12, 2026 - 2:00 p.m. MT"
         },
         "late": {
           "fee": "$375",
-          "closes": "March 26, 2026 - 2:00 p.m. MT"
+          "closes": ": March 26, 2026 - 2:00 p.m. MT"
         }
       },
       "schedule_milestones": {
@@ -1119,15 +1119,15 @@
       "registration_fees": {
         "early_bird": {
           "fee": "$145",
-          "closes": "July 30, 2026 - 2:00 p.m. MT"
+          "closes": ": July 30, 2026 - 2:00 p.m. MT"
         },
         "regular": {
           "fee": "$175",
-          "closes": "August 13, 2026 - 2:00 p.m. MT"
+          "closes": ": August 13, 2026 - 2:00 p.m. MT"
         },
         "late": {
           "fee": "$375",
-          "closes": "August 27, 2026 - 2:00 p.m. MT"
+          "closes": ": August 27, 2026 - 2:00 p.m. MT"
         }
       },
       "schedule_milestones": {
@@ -1356,15 +1356,15 @@
       "registration_fees": {
         "early_bird": {
           "fee": "$145",
-          "closes": "October 22, 2026 - 2:00 p.m. MT"
+          "closes": ": October 22, 2026 - 2:00 p.m. MT"
         },
         "regular": {
           "fee": "$175",
-          "closes": "November 5, 2026 - 2:00 p.m. MT"
+          "closes": ": November 5, 2026 - 2:00 p.m. MT"
         },
         "late": {
           "fee": "$375",
-          "closes": "November 19, 2026 - 2:00 p.m. MT"
+          "closes": ": November 19, 2026 - 2:00 p.m. MT"
         }
       },
       "schedule_milestones": {

@@ -306,7 +306,7 @@ A cron job (`YOUR_CRON_JOB_ID`) runs daily at 8am and delivers the open-threads 
 to the user's home channel (Slack DM by default).
 
 - **Script**: `${HERMES_HOME}/scripts/open-threads-scan.py` (runs first, output injected as context)
-- **Cron `script` field**: `open-threads-scan.py` — bare filename only. The cron runner resolves it under the scripts directory. A full command like `python3 -B ${HERMES_HOME}/scripts/open-threads-scan.py` will fail because the runner treats the entire string as a filename, producing `Script not found: /opt/data/scripts/python3 -B ${HERMES_HOME}/scripts/open-threads-scan.py`. See `script-first-cron-design` Pitfall #7 for both failure variants.
+- **Cron `script` field**: `open-threads-scan.py` — bare filename only. The cron runner resolves it under the scripts directory. A full command like `python3 -B ${HERMES_HOME}/scripts/open-threads-scan.py` will fail because the runner treats the entire string as a filename, producing `Script not found: ${HERMES_HOME}/scripts/python3 -B ${HERMES_HOME}/scripts/open-threads-scan.py`. See `script-first-cron-design` Pitfall #7 for both failure variants.
 - **LLM**: GLM-5.2 (classifies ambiguous sessions + formats briefing)
 - **Delivery**: `origin` (Slack DM), `attach_to_session: true` (replies continue in context)
 - **Silent**: if zero active/dangling sessions, output "SILENT" (no message sent)

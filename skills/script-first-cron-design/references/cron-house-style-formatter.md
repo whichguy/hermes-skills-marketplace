@@ -13,7 +13,7 @@ are descriptive Markdown hyperlinks he can click back to.
 ## The module
 
 A reusable formatter ships with this skill at `scripts/cron_style.py`. Copy it
-into the deployment's scripts directory (e.g. `/opt/data/scripts/cron_style.py`)
+into the deployment's scripts directory (e.g. `${HERMES_HOME}/scripts/cron_style.py`)
 so sibling cron scripts can `import cron_style as cs`.
 
 Helpers it provides:

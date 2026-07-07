@@ -578,7 +578,7 @@ When alerts describe schedule changes made by a named editor, phrase every line 
 
 > **`<actor> did <action> to <affected person>`**
 
-Never reverse this to person-centric ("James Wiese was removed by…"). The actor-first
+Never reverse this to person-centric ("The User was removed by…"). The actor-first
 structure makes it immediately clear who is responsible, then what they did, then who
 is affected — which is the most actionable reading order.
 
@@ -721,7 +721,7 @@ emoji · HH:MM AM/PM TZ · SN DayDate 🔴/⚪/🔵 Role: name (added/removed/ol
 - Session as `S1` not `Sess 1`
 - Time in short form: `9:47 PM MT` not full ISO
 
-**Cap bulk reshuffles:** on a full schedule rebuild 600+ lines hit at once. Always cap other-changes at ~30 lines with `… +N more (view sheet for full list)`. Show Jim/Kelly (or any VIP) in full regardless of cap.
+**Cap bulk reshuffles:** on a full schedule rebuild 600+ lines hit at once. Always cap other-changes at ~30 lines with `… +N more (view sheet for full list)`. Show Jim/Family Member (or any VIP) in full regardless of cap.
 
 **VIP pinning:** check `any(w in (old_n+new_n).lower() for w in WATCHED)` to separate VIP changes and pin them above the general list with a distinct header.
 
@@ -743,7 +743,7 @@ def fmt_line(c):
 ✏️  Editor: jodi.stumbo  |  1 save(s), 12 changes
 
 👇 [VIP names]:
-  🟦 Jim · ✅ 9:47 PM MT · S24 Tue Jun 23 🔴 Speaker: James Wiese (NAT)
+  🟦 Jim · ✅ 9:47 PM MT · S24 Tue Jun 23 🔴 Speaker: The User (NAT)
 
 📋 All changes:
   ✅ 9:47 PM MT · S1 Sat Jun 20 🔵 Marshal: Dori Turnier (ROOM N, Y)

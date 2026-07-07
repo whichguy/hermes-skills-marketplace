@@ -6,10 +6,8 @@ description: >
   multi-model consensus (advisors), iterative refinement, A/B comparison,
   sequential review chains. Each call is a full Hermes agent with tools,
   skills, and multi-turn reasoning. No delegate_task, no gateway-restart risk.
-version: 3.3.0
+version: 3.4.0
 author: agent
-license: MIT
-platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [multi-model, consensus, ensemble, reasoning, parallel, primitive]
@@ -28,7 +26,7 @@ metadata:
 
 One primitive — **prompt-model** — prompts a Hermes model via `hermes chat -q`
 and writes the output to a file. Each call is a full agent with tools, skills,
-and multi-turn reasoning. The controller (you) orchestrates this primitive into
+and multi-turn reasoning. The controller orchestrates this primitive into
 whatever pattern the task needs.
 
 ```
@@ -44,9 +42,102 @@ A/B:          same prompt, two models → diff the output files
 
 **Why this architecture:** `delegate_task` cannot select different models per
 subagent — all inherit `delegation.model` from config.yaml. Running `hermes
-chat -q` as a subprocess gives per-call model selection. Each call is a full
-agent (like Claude Code's spawned agents). Output goes to a file you can read,
-diff, archive, or feed into the next call.
+chat -q` as a subprocess gives per-call model selection. Output goes to a file
+you can read, diff, archive, or feed into the next call.
+
+## Data Channel Architecture (v3.4+)
+
+**Principle: Separate the data channel from the controller's context window.**
+
+The controller's running conversation should carry short prompts and file paths
+— never the full data payload. Review data (5-15K chars per seat) is write-once,
+read-once: it enters context only through the synthesis model reading from disk,
+never through the controller reading raw review files.
+
+```
+WRONG (context pollution):
+  Controller reads design.md (50K) → passes via --context "$(cat design.md)"
+  → 50K chars now in controller context, never useful again after dispatch
+
+RIGHT (file-referenced):
+  Controller writes brief → /tmp/advisors/brief.md (on disk)
+  Controller dispatches: "Read /tmp/advisors/brief.md and review X" -t file
+  → Advisor reads file from disk → data never enters controller context
+  → Only synthesis.md (~1-2K chars) enters controller context
+```
+
+### dispatch_advisors.py — the file-referenced dispatch helper
+
+```
+/opt/data/skills/autonomous-ai-agents/advisors/scripts/dispatch_advisors.py
+```
+
+Encapsulates the file-reference pattern. Controller writes the brief (question +
+all context) to disk, dispatches seats that read the brief from disk, then
+dispatches GLM synthesis that reads seat outputs from disk. The controller's
+context only carries the question string and file paths.
+
+**CLI (all-in-one):**
+```bash
+python3 dispatch_advisors.py run \
+    --question "Should we use PostgreSQL or MongoDB? ACID required, ~100K rows." \
+    --context-file /opt/data/wiki/design.md \
+    --outdir /tmp/advisors \
+    --toolsets file,web
+```
+
+**Python import (from execute_code — preferred for programmatic control):**
+```python
+import sys
+sys.path.insert(0, '/opt/data/skills/autonomous-ai-agents/advisors/scripts')
+from dispatch_advisors import AdvisorDispatch
+
+ad = AdvisorDispatch(outdir='/tmp/advisors')
+ad.prepare_brief(
+    question="Should we use PostgreSQL or MongoDB? ACID required, ~100K rows.",
+    context_file="/opt/data/wiki/design.md",
+)
+ad.dispatch()  # 3 seats, parallel, each reads brief from disk
+ad.synthesize()  # GLM reads seat files from disk → synthesis.md
+print(ad.read_synthesis())  # ~1-2K chars into controller context
+```
+
+**Testing:** Run `python3 tests/test_dispatch_advisors.py` from the skill
+directory. 43 tests cover parse_seats, prepare_brief, dispatch validation,
+synthesis, CLI, path resolution, auto-subdir isolation, whitespace-only
+parse_seats fallback, and empty seats guard. Always run tests
+after modifying `dispatch_advisors.py` — the tests catch regressions even
+though they didn't catch the original 10 bugs the advisor panel found.
+
+**Step-by-step CLI (controller wants granular control):**
+```bash
+# 1. Write brief to disk
+python3 dispatch_advisors.py prepare \
+    --question "..." --context-file design.md --outdir /tmp/advisors
+
+# 2. Dispatch seats (each reads brief from disk)
+python3 dispatch_advisors.py dispatch \
+    --brief /tmp/advisors/brief.md --outdir /tmp/advisors
+
+# 3. Synthesize (GLM reads seat files from disk)
+python3 dispatch_advisors.py synthesize \
+    --brief /tmp/advisors/brief.md --outdir /tmp/advisors
+```
+
+### When to use dispatch_advisors.py vs raw prompt_model.py
+
+**Default: `dispatch_advisors.py`.** Use `prompt_model.py` directly only for
+Pattern 4 (single model query) with context < 2K chars. Everything else —
+panels, synthesis, multi-step chains, any context > 2K — goes through
+`dispatch_advisors.py` to keep data out of the controller's transcript.
+
+| Use dispatch_advisors.py (default) | Use raw prompt_model.py (exception) |
+|---|---|
+| Multi-seat panels (Pattern 1, 5, 6) | Single model query (Pattern 4) with < 2K context |
+| Any context > 2K chars | Quick one-shot lookups with tiny inline context |
+| Code review with source files | A/B comparison (you want diff control) |
+| Any synthesis step | — |
+| Sequential review chains | — |
 
 ## The Primitive: prompt-model
 
@@ -108,991 +199,103 @@ cat design.md | python3 prompt_model.py -m glm-5.2:cloud \
 The script auto-appends "respond in English only" for known non-English models
 (`glm-5.2:cloud`, `glm-5.2`). Use `--english-only` to force it for other models.
 
-## Pattern 1: Advisors (Multi-Model Consensus)
+## Pattern Index
 
-Send one prompt to N models in parallel, then synthesize their responses.
-
-### When to Use
-
-| Use it | Don't use it |
-|---|---|
-| Architecture / design decisions | Simple lookups (one model is fine) |
-| Security review or risk analysis | Trivial questions (waste of N× tokens) |
-| Trade-off analysis with no clear answer | Code generation (use multi-model-dev-pipeline) |
-| High-stakes decisions where a wrong answer is costly | Anything under 1 min of reasoning |
-
-### Default Panel
-
-| Seat | Model | Why |
+| Pattern | When to use | Details |
 |---|---|---|
-| Reasoner | `deepseek-v4-pro:cloud` | Analytical reasoning, architecture |
-| Coder | `kimi-k2.7-code:cloud` | Code-focused lens, implementation issues |
-| Local Lens | `qwen3.6:35b-a3b` | Local 35B MoE, different training lineage, zero API cost |
+| Pattern 1: Advisors | Multi-model consensus for architecture, design, risk, trade-offs | [references/patterns.md#pattern-1](references/patterns.md#pattern-1) |
+| Pattern 2: Sequential Review Chain | Cumulative expertise where later reviewers build on earlier findings | [references/patterns.md#pattern-2](references/patterns.md#pattern-2) |
+| Pattern 3: A/B Comparison | Compare two models on the same prompt, diff outputs | [references/patterns.md#pattern-3](references/patterns.md#pattern-3) |
+| Pattern 4: Single Model Query | One model is enough; no panel needed | [references/patterns.md#pattern-4](references/patterns.md#pattern-4) |
+| Pattern 5: Adversarial Meta-Review | High-stakes, irreversible, or known LLM blind spots (opt-in) | [references/patterns.md#pattern-5](references/patterns.md#pattern-5) |
+| Pattern 6: 4-Round Deliberation | Design docs, architecture decisions, multi-version plans | [references/patterns.md#pattern-6](references/patterns.md#pattern-6) |
+| Pattern 7: Iterative Plan Refinement | Plans evolving through versions (broad → targeted → features) | [references/patterns.md#pattern-7](references/patterns.md#pattern-7) |
+| Pattern 8: Advisors as Fixers | Apply patches, not just recommendations | [references/patterns.md#pattern-8](references/patterns.md#pattern-8) |
+| Pattern 9: Plan → Review → Implement | User's preferred 3-phase workflow + quality review | [references/patterns.md#pattern-9](references/patterns.md#pattern-9) |
 
-**Synthesizer:** `deepseek-v4-pro:cloud` — or do it yourself (you're a model).
+## Pitfall Categories Index
 
-### Process
-
-#### Step 1 — Frame the question
-
-Write a clear, self-contained prompt. **Identical for all seats.** Include all
-context the models need — files, constraints, requirements.
-
-#### Step 2 — Show the dispatch plan
-
-```
-## 🏛️ Advisors Dispatch Plan
-
-**Question:** [one-line summary]
-
-| # | Seat | Model | Toolsets | Est. time |
-|---|---|---|---|---|
-| 1 | Reasoner | deepseek-v4-pro:cloud | file, web | ~30s |
-| 2 | Coder | kimi-k2.7-code:cloud | file, web | ~30s |
-| 3 | Generalist | glm-5.2:cloud | file, web | ~20s |
-
-**Synthesis:** deepseek-v4-pro:cloud (or controller)
-```
-
-#### Step 3 — Dispatch parallel prompt-model calls
-
-Use `execute_code` with `concurrent.futures` to run N calls in parallel:
-
-```python
-import subprocess, concurrent.futures, time, sys, os
-
-SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
-OUTDIR = "/tmp/advisors"
-os.makedirs(OUTDIR, exist_ok=True)
-
-seats = [
-    ("deepseek-v4-pro:cloud", "seat-1-reasoner.md", "Reasoner"),
-    ("kimi-k2.7-code:cloud", "seat-2-coder.md", "Coder"),
-    ("qwen3.6:35b-a3b", "seat-3-local.md", "Local Lens"),
-]
-
-QUESTION = "Should we use PostgreSQL or MongoDB? ACID required, ~100K rows."
-CONTEXT = open("/opt/data/wiki/design.md").read()
-TOOLSETS = "file,web"
-
-def dispatch(model, outfile, role):
-    cmd = [sys.executable, SCRIPT,
-        "-m", model, "-p", QUESTION,
-        "--context", CONTEXT,
-        "-t", TOOLSETS,
-        "-o", f"{OUTDIR}/{outfile}"]
-    start = time.time()
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    elapsed = time.time() - start
-    return role, model, elapsed, r.returncode, r.stderr.strip()
-
-with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-    futures = [pool.submit(dispatch, m, f, r) for m, f, r in seats]
-    for fut in concurrent.futures.as_completed(futures):
-        role, model, elapsed, rc, err = fut.result()
-        print(f"{'✅' if rc == 0 else '❌'} {role} ({model}): {elapsed:.1f}s")
-```
-
-#### Step 4 — Synthesize (dispatch to GLM, not in main context)
-
-**Do not read the review files into your main context** — that pollutes the
-running conversation with 10K+ chars per review. Instead, dispatch the
-synthesis to a cloud model via `prompt_model.py`. The model reads the files
-from disk and writes the synthesis to a file.
-
-```python
-import subprocess, sys
-
-SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
-OUTDIR = "/tmp/advisors"
-
-# Build the synthesis prompt — pass file paths, not file contents
-review_files = " ".join(f"- {OUTDIR}/{fname}" for _, fname, _ in seats)
-synthesis_prompt = (
-    f"Read these review files and synthesize a consensus: {review_files}. "
-    f"The original question was: {QUESTION}. "
-    "Produce: agreements, disagreements, final answer, confidence, caveats. "
-    "Do NOT split the difference — pick the strongest answer and justify it."
-)
-
-subprocess.run([sys.executable, SCRIPT,
-    "-m", "glm-5.2:cloud",
-    "-p", synthesis_prompt,
-    "-t", "file",
-    "-o", f"{OUTDIR}/synthesis.md"
-], timeout=120)
-```
-
-**Why GLM for synthesis:** It's a generalist that reads all perspectives
-without bias toward any single panel member's view. Do NOT use a panel member
-model for synthesis (self-bias — see Pitfalls). The synthesis file is small
-(~1-2K chars) — read that into your context to report to the user.
-
-#### Step 5 — Report to user
-
-```
-## 🏛️ Advisors Complete — 3/3 seats (43s)
-
-| Seat | Model | Time | Confidence | Position |
-|---|---|---|---|---|
-| Reasoner | deepseek-v4-pro | 6.7s | high | PostgreSQL |
-| Coder | kimi-k2.7-code | 5.9s | high | PostgreSQL |
-| Generalist | glm-5.2 | 22.6s | medium | MongoDB |
-
-**Consensus:** PostgreSQL (2/3 high, 1/3 medium)
-**Disagreement:** Generalist preferred MongoDB; overruled by ACID requirement.
-**Caveats:** All assumed <1M rows; revisit at 10M+.
-```
-
-### Adjusting the panel
-
-**Fewer seats** (2 + synthesis = 3 calls): For medium-stakes questions.
-
-**More seats** (4-5): For critical decisions. Beyond 5, diminishing returns.
-
-**Domain-specific:**
-
-| Domain | Panel |
+| Category | Pitfalls |
 |---|---|
-| Code architecture | 2 code models + 1 reasoner |
-| Security review | 2 code models + 1 reasoner + 1 generalist |
-| Product/business | 2 generalists + 1 reasoner |
-| Research | 2 reasoners + 1 generalist |
-
-**No synthesis** (`--no-synthesis` equivalent): Just collect independent
-answers. Useful when you want raw perspectives without forced consensus.
-
-## Pattern 2: Sequential Review Chain
-
-Each model reviews the previous model's output — each reviewer builds on the
-last, catching issues the prior model missed.
-
-### When to Use
-
-| Use it | Don't use it |
-|---|---|
-| Each model has a different expertise (security → perf → UX) | You want independent perspectives (use Pattern 1) |
-| Findings are cumulative — later reviewers need earlier context | You need speed (parallel is faster) |
-| You want a single refined answer, not multiple perspectives | You want to compare positions (use Pattern 3) |
-
-**Pattern 2 vs Pattern 1:** Use Pattern 2 (sequential) when each reviewer
-needs to see what the previous one found — e.g., a security reviewer finds
-issues, then a performance reviewer checks if the fixes hurt throughput,
-then a UX reviewer checks the user impact. Use Pattern 1 (parallel) when you
-want independent perspectives on the same question without anchoring bias.
-
-```python
-# Round 1: DeepSeek writes initial analysis
-subprocess.run([sys.executable, SCRIPT, "-m", "deepseek-v4-pro:cloud",
-    "-p", "Analyze this architecture for issues",
-    "--context", open("design.md").read(),
-    "-o", "/tmp/round-1.md"], timeout=120)
-
-# Round 2: Kimi reviews DeepSeek's analysis
-subprocess.run([sys.executable, SCRIPT, "-m", "kimi-k2.7-code:cloud",
-    "-p", "Review this analysis for missed issues or errors",
-    "--context", open("/tmp/round-1.md").read(),
-    "-o", "/tmp/round-2.md"], timeout=120)
-
-# Round 3: GLM reviews both
-subprocess.run([sys.executable, SCRIPT, "-m", "glm-5.2:cloud",
-    "-p", "Review these two analyses and produce a final verdict",
-    "--context", open("/tmp/round-1.md").read() + "\n\n" + open("/tmp/round-2.md").read(),
-    "-o", "/tmp/round-3.md"], timeout=120)
-```
-
-## Pattern 3: A/B Comparison
-
-Same prompt, two models, diff the outputs — surface where models agree and
-where they diverge.
-
-### When to Use
-
-| Use it | Don't use it |
-|---|---|
-| You want to see if two models converge on the same answer | You need a synthesis (use Pattern 1) |
-| Comparing model quality on a specific task | You need more than 2 perspectives (use Pattern 1) |
-| Testing prompt sensitivity across models | The question has a clear right answer (use Pattern 4) |
-
-```bash
-python3 prompt_model.py -m deepseek-v4-pro:cloud -p "Design an auth system" -o /tmp/plan-a.md
-python3 prompt_model.py -m kimi-k2.7-code:cloud -p "Design an auth system" -o /tmp/plan-b.md
-diff /tmp/plan-a.md /tmp/plan-b.md
-```
-
-## Pattern 4: Single Model Query
-
-Just ask one model something — no panel needed. This is the primitive itself
-(see [The Primitive: prompt-model](#the-primitive-prompt-model) above) with no
-composition. Use this when one model is enough and you don't need cross-model
-consensus:
-
-```bash
-python3 prompt_model.py -m deepseek-v4-pro:cloud \
-    -p "Review this function for edge cases" \
-    --context "$(cat auth.py)" \
-    -t file \
-    -o /tmp/review.md
-```
-
-## Pattern 5: Adversarial Meta-Review (Opt-In Second Round)
-
-Pattern 1 + one additional adversarial round. The same panel that produced
-the consensus is asked to find specific flaws in it — not to confirm it.
-
-**This is opt-in.** The basic Pattern 1 (3-4 calls) already captures 80-90% of
-the value. This pattern doubles cost and latency for a smaller marginal gain.
-Use it only when the decision is irreversible, expensive to reverse, or in a
-domain with known LLM blind spots (math, logic, causal inference).
-
-### When to Use
-
-| Use it | Don't use it |
-|---|---|
-| Irreversible or very expensive decisions (production deploy, contract, publication) | Routine code review, research synthesis, planning |
-| Domain with known LLM blind spots (math, logic, temporal reasoning) | Anything Pattern 1 already handles well |
-| Pattern 1 has shown inconsistent results on similar questions | Simple lookups, trivial questions |
-| Cost of being wrong dwarfs cost of analysis (wrong = $10K, analysis = $0.50) | Time-sensitive decisions (< 60s budget) |
-
-### What Was Cut (YAGNI)
-
-The original proposal included a **local draft step** (run the prompt through a
-local model first, then have cloud models review the draft). This was cut
-based on DeepSeek's YAGNI/KISS review (2026-06-28):
-
-- **Anchoring bias:** Cloud models seeing the draft fixate on its framing,
-  errors, and omissions rather than approaching the question fresh. You're
-  constraining 3 expensive cloud models to react to a free local model's output.
-- **Unnecessary:** Pattern 1 already gives each model the raw question. The
-  draft is a middleman that adds latency and potentially reduces quality.
-- **The real information gain is round 1:** Diverse models reviewing
-  independently is where genuine new findings appear. Everything after that is
-  aggregation and validation.
-
-### Why Adversarial (Not Confirmatory)
-
-Asking "is this consensus correct?" produces confirmation bias — LLMs are
-trained to be helpful and will generate plausible-sounding but low-value
-affirmations. The adversarial framing forces specificity and gives the model
-permission to say "nothing wrong."
-
-### The Hostile Auditor Prompt
-
-The key insight from DeepSeek's review: force the model to find a **specific
-factual error** or explicitly say "no error found." This prevents manufactured
-critiques that look impressive but add no signal.
-
-```
-You are a hostile auditor. Identify the single specific factual claim in this
-consensus that is most likely to be incorrect. Quote the exact sentence.
-Explain why it's wrong using concrete counterexamples or contradictory evidence.
-If you cannot find a specific factual error, say "NO SPECIFIC ERROR FOUND" and
-do not generate generic criticism.
-```
-
-### Process
-
-Uses the same panel as Pattern 1 (see [Default Panel](#default-panel) above).
-The panel is: DeepSeek (Reasoner) + Kimi (Coder) + Qwen (Local Lens).
-
-#### Step 1 — Run Pattern 1 (round 1 + synthesis)
-
-Follow Pattern 1 Steps 1-4: dispatch the question to 3 models in parallel,
-read the output files, and synthesize a consensus. Save the consensus to
-`/tmp/advisors/consensus.md`. See Pattern 1 for full dispatch code.
-
-#### Step 2 — Dispatch adversarial meta-review (parallel, same panel)
-
-Send the consensus + each reviewer's own original review back to the same
-models. Each gets the hostile auditor prompt.
-
-```python
-CONSENSUS = open(f"{OUTDIR}/consensus.md").read()
-
-ADVERSARIAL_PROMPT = (
-    "You are a hostile auditor. Identify the single specific factual claim in "
-    "this consensus that is most likely to be incorrect. Quote the exact "
-    "sentence. Explain why it's wrong using concrete counterexamples or "
-    "contradictory evidence. If you cannot find a specific factual error, say "
-    "\"NO SPECIFIC ERROR FOUND\" and do not generate generic criticism.\n\n"
-    "## Consensus\n" + CONSENSUS
-)
-
-def dispatch_meta(model, review_file, meta_file, role):
-    own_review = open(f"{OUTDIR}/{review_file}").read()
-    # Strip metadata header from their original review
-    lines = own_review.split('\n')
-    start = 0
-    for i, line in enumerate(lines):
-        if line.strip() == '-->':
-            start = i + 1
-            break
-    own_review_clean = '\n'.join(lines[start:]).strip()
-    # Write context to file to avoid shell escaping issues
-    ctx_file = f"{OUTDIR}/ctx-{role}.md"
-    with open(ctx_file, 'w') as f:
-        f.write(ADVERSARIAL_PROMPT + "\n\n## Your Original Review\n" + own_review_clean)
-    cmd = [sys.executable, SCRIPT,
-        "-m", model,
-        "-p", "Review the consensus below as a hostile auditor. Find the most dangerous factual error, or say NO SPECIFIC ERROR FOUND.",
-        "-c", ctx_file,
-        "-o", f"{OUTDIR}/{meta_file}"]
-    start = time.time()
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-    elapsed = time.time() - start
-    return role, model, elapsed, r.returncode
-
-with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-    futures = [pool.submit(dispatch_meta, m, rf, mf, r)
-               for m, rf, mf, r in
-               [("deepseek-v4-pro:cloud", "seat-1-reasoner.md", "meta-1-reasoner.md", "Reasoner"),
-                ("kimi-k2.7-code:cloud", "seat-2-coder.md", "meta-2-coder.md", "Coder"),
-                ("qwen3.6:35b-a3b", "seat-3-qwen.md", "meta-3-qwen.md", "Qwen")]]
-    for fut in concurrent.futures.as_completed(futures):
-        role, model, elapsed, rc = fut.result()
-        print(f"{'✅' if rc == 0 else '❌'} {role} meta-review ({model}): {elapsed:.1f}s")
-```
-
-#### Step 3 — Read meta-reviews
-
-```python
-import os
-meta_seats = [
-    ("meta-1-reasoner.md", "Reasoner"),
-    ("meta-2-coder.md",    "Coder"),
-    ("meta-3-qwen.md",     "Qwen"),
-]
-for meta_file, role in meta_seats:
-    path = f"{OUTDIR}/{meta_file}"
-    if os.path.exists(path):
-        print(f"\n{'='*50}")
-        print(f"{role} — Meta-Review")
-        print(f"{'='*50}")
-        print(open(path).read())
-```
-
-#### Step 4 — Final Synthesis (dispatch to GLM, not in main context)
-
-This is the key step that makes the adversarial round worthwhile. Dispatch
-the final synthesis to GLM — do not read the consensus + meta-reviews into
-your main context. GLM reads all files from disk and produces the final answer.
-
-```python
-import subprocess, sys
-
-SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
-OUTDIR = "/tmp/advisors"
-
-final_prompt = (
-    "You are the final synthesizer. Read the consensus and all meta-reviews, "
-    f"then produce the final answer. Files:\n"
-    f"- {OUTDIR}/consensus.md (the round 1 consensus)\n"
-    f"- {OUTDIR}/meta-1-reasoner.md (DeepSeek adversarial meta-review)\n"
-    f"- {OUTDIR}/meta-2-coder.md (Kimi adversarial meta-review)\n"
-    f"- {OUTDIR}/meta-3-qwen.md (Qwen adversarial meta-review)\n\n"
-    "Apply this decision tree to each meta-review:\n"
-    "- NO SPECIFIC ERROR FOUND → consensus stands, confidence increases\n"
-    "- Specific factual error, verifiable → correct the consensus\n"
-    "- Specific factual error, but wrong → note and dismiss (false positive)\n"
-    "- Generic critique → discard (the prompt said no generic criticism)\n"
-    "- Meta-reviewers disagree → note the split, lean toward consensus\n\n"
-    "Write: final answer, corrections applied, confidence level, open questions.\n"
-    "Do NOT rubber-stamp the consensus — if a meta-review found a real error, "
-    "the final answer MUST differ from the consensus on that point."
-)
-
-subprocess.run([sys.executable, SCRIPT,
-    "-m", "glm-5.2:cloud",
-    "-p", final_prompt,
-    "-t", "file",
-    "-o", f"{OUTDIR}/final.md"
-], timeout=120)
-```
-
-**Critical:** The final synthesis MUST differ from the consensus if any
-meta-review found a verified error. If all meta-reviews say "NO SPECIFIC
-ERROR FOUND," the final answer matches the consensus with higher confidence.
-The value of Pattern 5 is entirely in this step — if you skip it, the
-adversarial round was wasted tokens.
-
-Read only `final.md` (small, ~1-2K chars) into your context to report to the user.
-
-#### Step 5 — Report to user
-
-```
-## 🏛️ Adversarial Meta-Review Complete — 3/3 seats, 2 rounds
-
-### Round 1 (Independent Review)
-| Seat | Model | Time | Position |
-|---|---|---|---|
-| Reasoner | deepseek-v4-pro | 17.0s | DuckDB |
-| Coder | kimi-k2.7-code | 12.3s | DuckDB |
-| Qwen | qwen3.6:35b-a3b | 27.7s | DuckDB |
-
-**Consensus:** DuckDB, unanimous (3/3)
-
-### Round 2 (Adversarial Meta-Review)
-| Seat | Finding |
-|---|---|
-| Reasoner | NO SPECIFIC ERROR FOUND |
-| Coder | Flagged: consensus says "both handle 50M rows" — SQLite degrades on aggregates at scale |
-| Qwen | NO SPECIFIC ERROR FOUND |
-
-### Final
-**DuckDB, high confidence.** Correction applied: SQLite can store 50M rows but
-has documented performance degradation on aggregate queries at that scale.
-This strengthens the DuckDB recommendation.
-
-### Cost Analysis
-
-| Pattern | Calls | Wall time | Cloud cost | Use case |
-|---|---|---|---|---|
-| Pattern 1 (basic) | 3-4 | ~30s | 3× | Most decisions |
-| Pattern 5 (adversarial) | 6-7 | ~60-90s | 6× | High-stakes, irreversible |
-
-### Design Rationale
-
-Based on DeepSeek V4 Pro review (2026-06-28), incorporating YAGNI and KISS:
-
-1. **No local draft** — anchoring bias outweighs the benefit. Cloud models
-   review the raw question, not a weak model's framing of it.
-2. **Same panel both rounds** — each reviewer sees consensus + their own
-   original review. They can catch synthesis misrepresentation.
-3. **Hostile auditor prompt** — forces specific factual claims or "no error
-   found." Prevents manufactured critiques that look impressive but add no signal.
-4. **Fixed 2 rounds, no loop** — LLMs share training data; Delphi-style
-   convergence loops show diminishing returns by round 2. Two adversarial
-   rounds > four convergence rounds for LLMs.
-5. **GLM does synthesis (Step 4)** — dispatch synthesis to GLM via
-   `prompt_model.py`, not in the controller's main context. GLM is a
-   generalist, not a panel member, so no self-bias. Reading 10K+ chars of
-   reviews into the main context pollutes the running conversation —
-   dispatch out and read only the small synthesis file (~1-2K chars) back.
-6. **Opt-in, not default** — Pattern 1 is sufficient 90% of the time. This
-   pattern is for the 10% where being wrong is expensive.
-7. **DeepSeek + Kimi + Qwen panel** — reasoner + code-focused + local lens.
-   Qwen replaces GLM as the third seat for a different training lineage and
-   zero API cost.
-
-## Pattern 6: 4-Round Deliberation (Parallel → Consolidate → Parallel → Final)
-
-The user's preferred rhythm for multi-model review of design/architecture
-decisions. Two parallel rounds with a consolidation step in between — divergent
-thinking, then convergent thinking.
-
-### When to Use
-
-| Use it | Don't use it |
-|---|---|
-| Design docs, architecture decisions, plans | Simple yes/no questions |
-| Multi-version plans needing independent review per version | Single-version reviews (use Pattern 1) |
-| High-stakes decisions where adversarial review adds value | Quick lookups (use Pattern 4) |
-
-### Rhythm
-
-```
-Round 1: PARALLEL (divergent)
-  N models, same question, independent answers
-  → Each model approaches fresh, no anchoring bias
-
-Round 2: CONSOLIDATE
-  Synthesize findings: agreements, disagreements, gaps
-  → Controller does this (you're a model)
-
-Round 3: PARALLEL (convergent)
-  Same panel reviews the synthesis
-  → Hostile-auditor framing: "find the specific factual error"
-  → Each model sees synthesis + their own original review
-
-Round 4: FINAL SYNTHESIS
-  Incorporate corrections from Round 3
-  → Produce final answer with confidence level
-```
-
-### Why This Beats Sequential Chains
-
-Sequential review chains (A → B → C) have anchoring bias — B fixates on A's
-framing, C fixates on B's. The 4-round pattern gives each model an independent
-first look (Round 1), then a targeted second look at the synthesis (Round 3).
-Two parallel rounds > four sequential rounds for LLM-based review.
-
-### Process
-
-#### Round 1 — Parallel Divergent
-
-Same as Pattern 1 (Advisors). Dispatch N models with the same question.
-Each gets the raw question — no draft, no prior answer.
-
-#### Round 2 — Consolidate (dispatch to GLM)
-
-Dispatch the consolidation to GLM — do not read all N responses into your
-main context. GLM reads the files from disk and writes the synthesis:
-
-```python
-import subprocess, sys
-
-SCRIPT = "/opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py"
-OUTDIR = "/tmp/advisors"
-
-review_files = " ".join(f"- {OUTDIR}/{fname}" for _, fname, _ in seats)
-consolidate_prompt = (
-    f"Read these review files and synthesize a consensus: {review_files}. "
-    "Produce: agreements, disagreements, gaps, preliminary recommendation. "
-    "Do NOT split the difference — pick the strongest answer and justify it."
-)
-
-subprocess.run([sys.executable, SCRIPT,
-    "-m", "glm-5.2:cloud",
-    "-p", consolidate_prompt,
-    "-t", "file",
-    "-o", f"{OUTDIR}/consensus.md"
-], timeout=120)
-```
-
-#### Round 3 — Parallel Convergent
-
-Dispatch the same panel with the hostile-auditor prompt from Pattern 5.
-Each model sees the synthesis + their own original review. The prompt:
-
-```
-You are a hostile auditor. Identify the single specific factual claim in
-this synthesis that is most likely to be incorrect. Quote the exact sentence.
-Explain why it's wrong using concrete counterexamples. If you cannot find a
-specific factual error, say "NO SPECIFIC ERROR FOUND" and do not generate
-generic criticism.
-```
-
-#### Round 4 — Final Synthesis (dispatch to GLM)
-
-Same as Pattern 5 Step 4 — dispatch to GLM, not in main context. GLM reads
-`consensus.md` + all meta-review files and produces the final answer:
-
-```python
-final_prompt = (
-    "You are the final synthesizer. Read the consensus and all meta-reviews, "
-    f"then produce the final answer. Files:\n"
-    f"- {OUTDIR}/consensus.md\n"
-    f"- {OUTDIR}/meta-1-reasoner.md\n"
-    f"- {OUTDIR}/meta-2-coder.md\n"
-    f"- {OUTDIR}/meta-3-qwen.md\n\n"
-    "Decision tree: NO ERROR → keep, verified error → correct, "
-    "false positive → dismiss, generic → discard.\n"
-    "Write: final answer, corrections, confidence, open questions."
-)
-
-subprocess.run([sys.executable, SCRIPT,
-    "-m", "glm-5.2:cloud",
-    "-p", final_prompt,
-    "-t", "file",
-    "-o", f"{OUTDIR}/final.md"
-], timeout=120)
-```
-
-### Real Run
-
-See `references/real-run-orchestrator-plan-review-2026-06-28.md` for a 3-round
-example that approximates this pattern (the user formalized it mid-session).
-
-## Pattern 7: Iterative Plan Refinement
-
-Apply Pattern 1 (Advisors) iteratively across multiple plan versions. Each round
-narrows scope: broad review → targeted verification → new feature review.
-
-### When to Use
-
-| Use it | Don't use it |
-|---|---|
-| Design docs evolving through feedback | Single-version reviews (use Pattern 1) |
-| Multi-version plans needing independent review per version | Quick yes/no questions (use Pattern 4) |
-| v1 has known issues, v2 needs verification before adding features | Stable plans after round 1 (stop — don't over-review) |
-
-### Rhythm: Full → Targeted → Full
-
-```
-write plan v1
-  → dispatch 3-seat panel (broad review)
-  → read reviews, patch plan → v2
-  → dispatch 1-seat targeted review (did fixes hold?)
-  → read review, patch plan → v2.1
-  → add new features → v3
-  → dispatch 3-seat panel (review new features)
-  → read reviews → converge on recommendation
-```
-
-**Round 1 (broad):** Full 3-seat panel for wide coverage. Find all issues.
-**Round 2 (targeted):** Single seat (DeepSeek) to verify specific fixes. Cheaper
-and faster than re-running the full panel. Only use when the changes are
-incremental fixes, not new features.
-**Round 3 (features):** Back to full panel for new feature review.
-
-### Split-Recommendation Synthesis
-
-When all seats independently recommend the same structural change (e.g., "split
-into serial and parallel phases"), it's a strong signal. Act on it immediately —
-don't re-review the recommendation.
-
-| Signal | Action |
-|---|---|
-| All seats recommend same split | Apply the split immediately |
-| 2/3 recommend split, 1/3 disagrees | Read dissenter's reasoning; if weak, apply split |
-| 1/3 recommends split | Note it but don't act — not enough consensus |
-| Split recommended but details differ | Take the most detailed recommendation as template |
-
-### Real Run
-
-See `references/real-run-orchestrator-plan-review-2026-06-28.md` for a 3-round
-example: orchestrator state machine design went from v1 (7 states, undefined
-stagnation) to v3-serial (implementation-ready) across 7 advisor calls.
-
-### When to Stop
-
-Over-reviewing is real — each round has diminishing returns. Stop when:
-
-| Signal | Action |
-|---|---|
-| Round finds no new issues | Stop — the plan is stable |
-| Round only finds style/nitpick issues | Stop — substantive review is done |
-| 2+ rounds with no structural changes | Stop — you're polishing, not improving |
-| Panel unanimously approves | Stop — consensus reached |
-| 3 rounds completed | Hard stop — review what's left and decide |
-
-**Rule of thumb:** 2-3 rounds is almost always enough. If you're still finding
-major issues in round 3, the problem is the plan's foundation, not the review
-depth. Go back to the design, don't add a 4th review round.
-
-## Pitfalls
-
-### Config deference: do not override Hermes config defaults
-
-The `--max-turns` flag defaults to `None` in `prompt_model.py`, which means
-Hermes config `agent.max_turns` (currently 120) is the source of truth. Do
-NOT hardcode `--max-turns` in advisor dispatches unless the user explicitly
-requests a specific value. The same applies to `--timeout` — only override
-when there's a domain-specific reason (e.g., `execute_code` 5-min cap).
-
-This is the same principle as the `ask` skill's config-deference rule: skills
-should NOT impose their own limits when Hermes already has a config key for it.
-
-### Do not read review files into main context — dispatch synthesis to GLM
-
-Every synthesis step (Pattern 1 Step 4, Pattern 5 Step 4, Pattern 6 Rounds 2+4)
-must be dispatched to GLM via `prompt_model.py -t file`. Do NOT read the raw
-review files into your main context. Each review is 5-15K chars — loading 3-6
-of them pollutes the running conversation with 30-90K chars that are never
-useful again after synthesis.
-
-**Wrong:** Read all review files into context, reason about them, write
-synthesis inline.
-
-**Right:** Dispatch to GLM with file paths + `-t file`. GLM reads files from
-disk, writes synthesis to a file. You read only the small synthesis file
-(~1-2K chars) into your context to report to the user.
-
-The synthesis model is GLM (not a panel member) to avoid self-bias. See the
-"Consensus model as a panel member" pitfall below.
-
-### Non-English models (glm-5.2:cloud)
-
-The script auto-appends "respond in English only" for known non-English models.
-To add a new one, add it to `NON_ENGLISH_MODELS` in `prompt_model.py`.
-
-### Seat timeout
-
-Default 300s per call. If a seat exceeds it, the subprocess is killed and
-returns exit code 2. Proceed with completed seats — a 2-seat result is useful.
-
-### Model unavailable
-
-If a model is down, `hermes chat` returns an error. The script writes the error
-to stderr and exits with code 1. Check the file exists before reading.
-
-### Token limits
-
-The default `--max-turns` is `None`, which means Hermes config `agent.max_turns`
-is the source of truth (currently 120). Do not override `--max-turns` in
-advisor dispatches unless the user explicitly requests a specific value.
-The Hermes config already sets a sensible limit — hardcoding a lower value
-in the advisors skill silently caps every call.
-
-### Concurrent subprocess limits
-
-Each call spawns a `hermes chat` process. With 5 parallel seats, that's 5
-processes. Watch system resources on constrained hardware.
-
-### execute_code interruption kills all subprocesses
-
-When the advisors dispatch runs inside `execute_code` with `concurrent.futures`,
-a user interruption (Ctrl+C, "Operation interrupted") kills the entire
-`execute_code` process — including all in-flight `prompt_model.py` subprocesses.
-Only seats that already completed survive; any mid-flight seat is lost.
-
-**Symptoms:** You see "Operation interrupted" in the output, and only 1-2 of
-3+ seats have output files. The remaining seats never wrote their files.
-
-**Recovery:**
-1. Read the output files that DID complete — partial results are still useful
-2. Re-dispatch only the missing seats (not the full panel)
-3. For the re-dispatch, use individual `terminal()` calls instead of
-   `execute_code` with `concurrent.futures` — individual calls survive
-   interruption better because each is a separate tool invocation
-
-**Prevention:** For high-stakes panels where losing seats is costly, dispatch
-each seat as a separate `terminal(background=true)` call with
-`notify_on_complete=true`. This is slower (sequential tool calls) but each
-seat is independently tracked and survives interruption. Reserve
-`execute_code` + `concurrent.futures` for panels where partial results are
-acceptable.
-
-### execute_code has a 5-minute hard timeout — use terminal(background=true) for long dispatches
-
-`execute_code` has a 5-minute (300s) hard timeout. A 15-turn advisor agent reviewing
-multiple source files and writing an updated plan can take 3-8 minutes — well within
-the `--timeout 600` you'd set on `prompt_model.py`, but exceeding `execute_code`'s cap.
-The subprocess is killed mid-review and the output file is never written.
-
-**Symptoms:** `execute_code` returns with a timeout error after exactly 5 minutes.
-The advisor's output file doesn't exist or is empty. The advisor was mid-turn when killed.
-
-**Fix:** Use `terminal(background=true, timeout=600, notify_on_complete=true)` instead
-of `execute_code` for any advisor dispatch expected to take >4 minutes:
-
-```python
-# BEFORE (fails for long reviews):
-execute_code(code=f"""
-import subprocess, sys
-subprocess.run([sys.executable, SCRIPT, "-m", "deepseek-v4-pro:cloud",
-    "-p", "Review the plan...", "-t", "file,terminal",
-    "--timeout", "600",
-    "-o", "/tmp/review.md"], timeout=600)
-""")
-
-# AFTER (works for any duration):
-terminal(
-    command='python3 /opt/data/skills/autonomous-ai-agents/advisors/scripts/prompt_model.py '
-            '-m deepseek-v4-pro:cloud '
-            '-p "Review the plan at /path/to/plan.md against source files. '
-            'Update the plan with any fixes found." '
-            '-t file,terminal --timeout 600 '
-            '-o /tmp/review.md',
-    background=True,
-    notify_on_complete=True,
-    timeout=600
-)
-```
-
-**Threshold:** Use `terminal(background=true)` for any advisor dispatch with
-`--timeout >= 300`. For quick dispatches (`--timeout <= 120`),
-`execute_code` is fine. The `--max-turns` threshold no longer applies
-because we don't override it — Hermes config is the source of truth.
-
-### Local models may time out in agent loops
-
-Local models (qwen3.6:35b-a3b, qwen3-coder-next:q4_K_M) are fast for single
-inference but slow for multi-turn agent loops. Each tool call adds 0.5-3s of
-model latency. A 5-turn agent loop on a local model can take 2-5 minutes vs
-30-60s on cloud models. For time-sensitive panels, skip the local seat
-entirely rather than overriding `--max-turns`. If the user explicitly requests
-a lower turn limit for a local seat, pass `--max-turns` only for that seat.
-
-### Stale imports when shared constants are removed from model_utils.py
-
-`prompt_model.py` imports constants from `model_utils.py` (e.g., `DEFAULT_MAX_TURNS`).
-When those constants are removed from `model_utils.py` during a config-deference
-cleanup (replacing hardcoded defaults with `None` to let Hermes config win),
-`prompt_model.py` breaks with `ImportError: cannot import name 'DEFAULT_MAX_TURNS'`.
-This is the same class of bug that affected `ask.py` — any consumer of
-`model_utils.py` that imports shared constants is vulnerable.
-
-**Symptoms:** `prompt_model.py` exits immediately with code 1 before the agent
-loop starts. The error is in the import block, not in agent reasoning. All
-seats fail with the same error in under 1 second.
-
-**Recovery:**
-1. Remove the stale import from `prompt_model.py`
-2. Change the argparse default from the removed constant to `None`
-3. Update the help text to say "Hermes config agent.max_turns" instead of the old constant name
-4. Verify: `python3 -c "import py_compile; py_compile.compile('prompt_model.py', doraise=True)"`
-5. Verify downstream consumers still import correctly: `from model_utils import dispatch_single`
-
-**Prevention:** After removing any constant from `model_utils.py`, grep all
-consumers:
-```bash
-grep -rn "DEFAULT_MAX_TURNS\|OLD_CONSTANT_NAME" /opt/data/skills/
-```
-This includes `prompt_model.py`, `ask.py`, `pipeline.py`, `sdlc.py`, and any
-other script that imports from `model_utils.py`. The `ask` skill's "Default
-Changes Must Audit All Entry Points" pitfall covers the same pattern.
-
-### prompt_model.py must run from ask/scripts/ directory
-
-`prompt_model.py` imports from `model_utils.py` which lives in
-`/opt/data/skills/productivity/ask/scripts/`. The script's `sys.path` setup
-adds that directory, but only relative to the script's own location. When
-called from a different working directory via `subprocess.run()`, the import
-may fail if `sys.path` resolution doesn't find `model_utils.py`.
-
-**Symptoms:** `ImportError: cannot import name 'dispatch_single' from
-'model_utils'` or similar. The subprocess exits with code 1 immediately.
-
-**Fix:** Always set `cwd` to the ask scripts directory when calling
-`prompt_model.py`:
-
-```python
-ASK_SCRIPTS_DIR = "/opt/data/skills/productivity/ask/scripts"
-subprocess.run(cmd, cwd=ASK_SCRIPTS_DIR, ...)
-```
-
-Or add both possible paths to `sys.path` in the dispatch function:
-
-```python
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/opt/data/skills/productivity/ask/scripts")
-```
-
-The `execute_code` dispatch pattern in this skill already includes the
-`cwd=ASK_SCRIPTS_DIR` fix. Use it as the template.
-
-### Backticks and special characters in prompts break shell commands
-
-When the prompt contains backticks (`` ` ``), dollar signs (`$`), or other
-shell-special characters, the shell interprets them before `prompt_model.py`
-ever sees the argument. Backticks trigger command substitution, consuming
-subsequent arguments and causing cryptic errors like:
-
-```
-prompt_model.py: error: the following arguments are required: -p/--prompt
-```
-
-This happens because the backtick-substituted text ate the `-p` flag. The
-subprocess exits with code 2 before Python even starts.
-
-**Symptoms:** Exit code 2, "the following arguments are required" error,
-immediate failure (0s elapsed). The command looks correct but the shell
-mangled it.
-
-**Fix:** Always use `--context-file` (`-c`) for prompts containing backticks,
-code blocks, shell commands, or any special characters:
-
-```bash
-# BEFORE (fails — backticks trigger shell command substitution):
-python3 prompt_model.py -m kimi-k2.7-code:cloud \
-    -p "Run: cd /path && uv run pytest tests/ -v -k 'not live' 2>&1 | tail -20"
-
-# AFTER (safe — prompt goes through a file, not the shell):
-echo "Run: cd /path && uv run pytest tests/ -v -k 'not live' 2>&1 | tail -20" > /tmp/prompt.txt
-python3 prompt_model.py -m kimi-k2.7-code:cloud \
-    -c /tmp/prompt.txt -o /tmp/result.md
-```
-
-**Rule of thumb:** If the prompt contains backticks, `$()`, `&&`, `|`, `>`,
-`<`, or `;`, use `--context-file`. The only safe characters for inline `-p`
-are alphanumerics, spaces, and basic punctuation.
-
-### Argument list too long (OSError: Errno 7)
-
-When passing large context via `--context` on the command line, the OS may
-reject the argument list if it exceeds `ARG_MAX` (typically 128KB-2MB on
-Linux). This manifests as `OSError: [Errno 7] Argument list too long`.
-
-**Symptoms:** The subprocess.run() call fails immediately with OSError before
-the Python script even starts. The error message includes the full command
-path.
-
-**Fix:** Use `--context-file` instead of `--context` for large context:
-
-```python
-# BEFORE (fails with large context):
-subprocess.run([sys.executable, SCRIPT, "-m", model, "-p", prompt,
-    "--context", large_context_string, ...])
-
-# AFTER (works regardless of size):
-import tempfile
-with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-    f.write(large_context_string)
-    ctx_path = f.name
-subprocess.run([sys.executable, SCRIPT, "-m", model, "-p", prompt,
-    "-c", ctx_path, ...])
-```
-
-Or for the simplest case, just let the model read files from disk — pass a
-short prompt that says "read the plan at /path/to/plan.md" and give the model
-`-t file` toolsets. The model reads the file itself rather than receiving it
-as context. This is the preferred approach for very large context (100K+ chars).
-
-**Threshold:** ~100KB of context is the danger zone. Below 50KB, `--context`
-is fine. Between 50-100KB, test it. Above 100KB, always use `--context-file`
-or file-reading approach.
-
-### Gateway restarts are safe
-
-Subprocesses are independent of the gateway process. A gateway restart during
-a run does NOT affect running calls. This is the key advantage over
-`delegate_task`.
-
-### Session ID goes to stderr in quiet mode
-
-When `hermes chat -q` runs in quiet mode, the session ID is printed to
-**stderr**, not stdout. If you're capturing output with `subprocess.run` and
-only reading `stdout`, you'll miss the session ID. Always capture both:
-
-```python
-r = subprocess.run(cmd, capture_output=True, text=True)
-# Session ID is in r.stderr, not r.stdout
-```
-
-This matters for the `ask` skill's session memory feature — it reads the
-session ID from stderr to enable conversational follow-up queries.
-
-### 3-seat panels catch more than 2-seat panels
-
-In the v6 SDLC state machine quality review (2026-06-28), a 3-seat panel
-(DeepSeek + Kimi + GLM) found 14 issues total. GLM caught 6 issues that
-DeepSeek and Kimi both missed — including thinking levels, toolsets, pytest
-flag conflicts, and regex bugs. A 2-seat panel would have shipped with 6 bugs.
-
-**Rule:** For code review and quality assurance, use 3 seats minimum. The
-marginal cost of the 3rd seat (~$0.02) is negligible compared to shipping
-with bugs. For simple lookups or yes/no questions, 1-2 seats is fine.
-
-### Consensus model as a panel member
-
-If the synthesis model also answered independently, it's biased toward its own
-answer. Use a different model for synthesis, or note the self-bias.
-
-### File-reading review tasks need `-t file,terminal`
-
-When dispatching an advisor to review source code and update a plan file
-in-place (the SDLC plan review pattern), the advisor needs `-t file,terminal`
-toolsets. Without file access, the advisor can only read context passed via
-`--context` or `--context-file`, which may hit the OS argument size limit for
-large codebases. With `-t file,terminal`, the advisor reads source files from
-disk and writes the updated plan back — no context-size limit.
-
-```bash
-# Plan review pattern: advisor reads source + writes updated plan
-python3 prompt_model.py -m deepseek-v4-pro:cloud \
-    -p "Review the plan at /path/to/plan.md against source files in /path/to/src/.
-         Update the plan with any fixes found." \
-    -t file,terminal \
-    --timeout 600 \
-    -o /tmp/review-output.md
-```
-
-This pattern was used for all 4 review passes in the SDLC plan design session
-(2026-06-28). The advisor reads 3+ source files (model_utils.py 897 lines,
-sdlc.py 1317 lines, pipeline.py) plus the plan itself, then writes the updated
-plan back to disk. Without `-t file`, the context would need to be passed via
-`--context-file` which is fragile for multi-file reviews.
-
-## What Changed (v2 → v3)
-
-| Dimension | v2 (advisors.py) | v3 (prompt_model.py + pattern) |
+| Token efficiency | [Keep SKILL.md lean — extract code to scripts/](references/pitfalls.md#token-efficiency) |
+| Output quality | [Logical-level output](references/pitfalls.md#output-quality), [verify findings](references/pitfalls.md#output-quality), [panel size rules](references/pitfalls.md#output-quality), [consensus model bias](references/pitfalls.md#output-quality), [DeepSeek API drops](references/pitfalls.md#output-quality) |
+| Configuration | [Config deference](references/pitfalls.md#configuration-and-defaults), [stale imports](references/pitfalls.md#configuration-and-defaults), [token limits](references/pitfalls.md#execution-environment), [seat timeout](references/pitfalls.md#execution-environment) |
+| Context / data channel | [Separate data channel](references/pitfalls.md#context-and-data-channel), [context threshold](references/pitfalls.md#context-and-data-channel), [file-reading toolsets](references/pitfalls.md#context-and-data-channel), [timeout on too many files](references/pitfalls.md#context-and-data-channel), [complete context files](references/pitfalls.md#context-and-data-channel), [special chars in prompts](references/pitfalls.md#context-and-data-channel), [ARG_MAX](references/pitfalls.md#context-and-data-channel), [context sources are additive](references/pitfalls.md#context-and-data-channel) |
+| Execution environment | [execute_code interruption](references/pitfalls.md#execution-environment), [5-minute timeout](references/pitfalls.md#execution-environment), [sandbox persistence](references/pitfalls.md#execution-environment), [local models in loops](references/pitfalls.md#execution-environment), [gateway restarts](references/pitfalls.md#execution-environment), [stderr session ID](references/pitfalls.md#execution-environment), [concurrent limits](references/pitfalls.md#execution-environment) |
+| Script-specific | [CLI subcommands](references/pitfalls.md#script-specific-behaviors), [parse_seats pipe syntax](references/pitfalls.md#script-specific-behaviors), [whitespace-only seats](references/pitfalls.md#script-specific-behaviors), [as_completed order](references/pitfalls.md#script-specific-behaviors), [seats.json manifest](references/pitfalls.md#script-specific-behaviors), [cwd-independent imports](references/pitfalls.md#script-specific-behaviors), [prepare_brief signature](references/pitfalls.md#script-specific-behaviors) |
+| Synthesis | [Use foreground subprocess.run for synthesis](references/pitfalls.md#synthesis-and-workflow) |
+| Meta-patterns | [Eat your own dogfood](references/pitfalls.md#meta-patterns) |
+| Non-English models | [Auto English for glm-5.2:cloud](references/pitfalls.md#non-english-models) |
+
+## Decision Table: File-Reference vs Inline Context
+
+**Default: file-reference.** Inline is the exception, not a peer option.
+
+| Context size | Approach | Rationale |
 |---|---|---|
-| Script | 414-line monolith | 150-line primitive |
-| Synthesis | Coded in Python | Controller does it (it's a model) |
-| Output | JSON (ephemeral) | Files (inspectable, diffable, archivable) |
-| Patterns | Council only | 7 patterns documented |
-| Composability | No | Yes — primitive + controller orchestration |
+| < 2K chars | Inline `--context` (only for Pattern 4 single queries) | Overhead of file I/O > transcript cost |
+| 2K–5K chars | File-reference (`-c` or `dispatch_advisors.py`) | Transcript pollution starts; not worth the risk |
+| 5K–50K chars | File-reference + `dispatch_advisors.py` | Transcript pollution dominates |
+| > 50K chars | File-reference + `-t file` (model reads from disk) | Cumulative cost over session is prohibitive |
+
+**Rule of thumb:** File-reference for everything except single-seat Pattern 4
+queries under 2K. The "2K either way" band was removed — it created ambiguity
+that let inline creep into multi-seat panels. The real cost is cumulative
+transcript pollution, not context-window pressure.
+
+### Size guard: this skill practices what it preaches
+
+This SKILL.md was 85KB before the v3.4.x refactor — the heaviest skill in the
+directory. It grew because each pattern was documented with inline code blocks
+that accumulated in the controller's context on every skill load. The refactor
+extracted bulk content to `references/*.md`, loaded on demand via
+`skill_view(file_path=...)`.
+
+**Maintenance rule:** If SKILL.md exceeds 20KB, extract bulk content to
+`references/`. The lightweight index (this file) should stay under 20KB.
+Reference files are the data channel; SKILL.md is the context.
+
+## Quick Reference
+
+Compact cheatsheet below. Full version: [references/quick-reference.md](references/quick-reference.md).
+
+```
+# ── dispatch_advisors.py (DEFAULT — use for everything except Pattern 4 < 2K)
+python3 dispatch_advisors.py run -q "question" --context-file data.md --outdir /tmp/advisors
+
+from dispatch_advisors import AdvisorDispatch
+ad = AdvisorDispatch(outdir='/tmp/advisors')
+ad.prepare_brief(question="...", context_file="data.md", verify_preamble=True)
+ad.dispatch(seats=[("deepseek-v4-pro:cloud", "Reasoner"), ("kimi-k2.7-code:cloud", "Coder")])
+ad.synthesize()
+print(ad.read_synthesis())  # ~1-2K chars into context
+
+# ── prompt_model.py (exception — Pattern 4 single queries with < 2K context only)
+python3 prompt_model.py -m <model> -p <prompt> [--context "< 2K"] -o <file>
+
+# Patterns 1-9: see Pattern Index above and references/quick-reference.md
+```
+
+## References
+
+- `scripts/dispatch_advisors.py` — File-referenced dispatch helper (v3.4+). Writes brief to disk, dispatches seats that read from disk, synthesizes via GLM reading from disk.
+- `scripts/prompt_model.py` — The primitive: single-model query with per-call model selection.
+- `tests/test_dispatch_advisors.py` — 43 persistent tests. Run with `python3 tests/test_dispatch_advisors.py` from the skill directory.
+- `references/patterns.md` — Full text of all 9 patterns with complete code blocks, real-run examples, and step-by-step processes.
+- `references/pitfalls.md` — Consolidated anti-patterns organized by category.
+- `references/quick-reference.md` — Full quick-reference cheatsheet for all patterns.
+- `references/targeted-verification-pattern.md` — Targeted single-model verification after a panel review.
+- `references/self-review-dispatch-advisors-2026-07-05.md` — Self-review of v3.4 dispatch_advisors.py; found 10 confirmed bugs.
+- `references/deepseek-plan-review-2026-07-05.md` — DeepSeek review of the v3.4 fix plan; corrected 5K threshold rationale.
+- `references/real-run-orchestrator-plan-review-2026-06-28.md` — 3-round deliberation-like example.
+- `references/real-run-v6-state-machine-design-2026-06-28.md` — Pattern 7 iterative refinement in action.
+- `references/real-run-adversarial-meta-review-2026-06-28.md` — Pattern 5 adversarial review on SQLite vs DuckDB.
+- `references/adversarial-self-review-2026-06-28.md` — Live test of Pattern 5 reviewing itself.
+- `references/advisors-as-fixers-2026-07-05.md` — Pattern 8 full pattern and real-run example.
+- `references/plan-review-implement-devloop-2026-07-05.md` — Pattern 9 real run.
+- `references/token-efficiency-review-2026-07-05.md` — Cross-skill review that motivated this refactor.
+- `references/real-run-usaw-event-info-review-2026-07-06.md` — Pattern 1+8: advisor review of usaw-event-info skill, 28 findings, batch-fixed 7 S-effort items.
+- `references/` — Additional real-run logs and historical notes.
 
 ## Consumers
 
@@ -1127,62 +330,35 @@ not covered by `dev`.
 > `prompt_model.py` instead, which actually selects different models per call.
 >
 > **Migration:** Use `dev.py pipeline` for full dev pipelines, or compose
-> `prompt_model.py` calls manually for custom workflows. The stage prompts
-> and model rationale in `multi-model-dev-pipeline/references/` are still
-> useful reference material.
+> `prompt_model.py` calls manually for custom workflows.
 
-## Quick Reference
+## What Changed
 
-```
-# Primitive
-python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
+### v2 → v3
 
-# Pattern 1: Advisors (3 parallel + GLM synthesis) — most decisions
-1. Show dispatch plan
-2. Dispatch N prompt-model calls in parallel (execute_code + concurrent.futures)
-3. Do NOT read review files into main context
-4. Dispatch synthesis to GLM: prompt_model.py -m glm-5.2:cloud -t file -o synthesis.md
-5. Read only synthesis.md (~1-2K chars) into context, report to user
+| Dimension | v2 (advisors.py) | v3 (prompt_model.py + patterns) |
+|---|---|---|
+| Script | 414-line monolith | 150-line primitive |
+| Synthesis | Coded in Python | Controller/model synthesis |
+| Output | JSON (ephemeral) | Files (inspectable, diffable, archivable) |
+| Patterns | Council only | 9 documented patterns |
+| Composability | No | Yes — primitive + controller orchestration |
 
-# Pattern 2: Sequential Review Chain — cumulative expertise
-1. Dispatch model A → read output
-2. Dispatch model B with A's output as context → read
-3. Dispatch model C with B's output as context → read
-4. Report final refined answer
+### v3.3 → v3.4
 
-# Pattern 3: A/B Comparison — model divergence check
-1. Dispatch same prompt to 2 models → 2 files
-2. diff the output files
-3. Report where they agree and diverge
+| Dimension | v3.3 | v3.4 |
+|---|---|---|
+| Data channel | Context inline via `--context` | Brief on disk, seats read via `-t file` |
+| Controller context | Carries full data payload | Carries only prompts + file paths |
+| Dispatch helper | Manual `concurrent.futures` boilerplate | `AdvisorDispatch` class |
+| Synthesis | Manual prompt construction | `ad.synthesize()` one call |
 
-# Pattern 4: Single Model Query — one model is enough
-python3 prompt_model.py -m <model> -p <prompt> [--context ...] -o <file>
+### v3.4.0 → v3.4.x (this refactor)
 
-# Pattern 5: Adversarial Meta-Review (opt-in, high-stakes only)
-1. Run Pattern 1 above, save consensus to file (GLM synthesis)
-2. Dispatch same panel with hostile-auditor prompt: "find the specific factual
-   error in this consensus, or say NO SPECIFIC ERROR FOUND"
-3. Do NOT read meta-reviews into main context
-4. Dispatch final synthesis to GLM: prompt_model.py -m glm-5.2:cloud -t file -o final.md
-5. Read only final.md into context, report to user
-
-# Pattern 6: 4-Round Deliberation (design/architecture decisions)
-1. Round 1: Parallel divergent — N models, same question, independent answers
-2. Round 2: Consolidate — dispatch to GLM (not in main context)
-3. Round 3: Parallel convergent — same panel, hostile-auditor framing on synthesis
-4. Round 4: Final synthesis — dispatch to GLM, read only final.md into context
-
-# Pattern 7: Iterative Plan Refinement — multi-version review
-1. Write plan v1 → dispatch broad 3-seat panel → patch → v2
-2. Dispatch 1-seat targeted review (did fixes hold?) → patch → v2.1
-3. Add new features → v3 → dispatch full panel → converge
-4. Stop when: no new issues, or 3 rounds max (see "When to Stop")
-```
-
-## References
-
-- `scripts/prompt_model.py` — The primitive
-- `references/` — Real-run logs (historical, from council v1 and advisors v2)
-- `references/real-run-v6-state-machine-design-2026-06-28.md` — **Pattern 7 in action:** 3-round iterative plan refinement for the v6 SDLC state machine (45-iteration scaling). 7 advisor calls across 3 rounds (broad → targeted → features). Key learnings: split recommendation is a strong signal, targeted verification saves cost, integrate don't build standalone, 45 iterations changes everything.
-- `references/adversarial-self-review-2026-06-28.md` — Live test: Pattern 5 reviewing the skill that defines Pattern 5. Validates the adversarial round catches real controller synthesis errors.
-- `references/real-run-adversarial-meta-review-2026-06-28.md` — **Pattern 5 in action:** SQLite vs DuckDB (50M rows, embedded analytics). Round 2 caught 2 real reasoning errors in the consensus (misleading VM overhead attribution, overgeneralized full-row-scan claim). Neither changed the recommendation, both refined the reasoning. Qwen returned NO SPECIFIC ERROR FOUND (escape hatch works).
+| Dimension | Before | After |
+|---|---|---|
+| SKILL.md size | ~85 KB | ~8-12 KB lightweight index |
+| Pattern detail | Inline in SKILL.md | Extracted to `references/patterns.md` |
+| Pitfalls | Inline in SKILL.md | Extracted to `references/pitfalls.md` |
+| Quick reference | Inline in SKILL.md | Extracted to `references/quick-reference.md` |
+| Load cost | Full payload on every skill load | Only index loads; references loaded on demand |

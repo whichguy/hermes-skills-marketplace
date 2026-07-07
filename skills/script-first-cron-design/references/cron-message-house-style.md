@@ -5,7 +5,7 @@ correct. Applies to both `no_agent` script output and LLM briefs.
 
 ## House style (Telegram, converted from standard Markdown)
 
-A shared formatter module (e.g. `/opt/data/scripts/cron_style.py`) keeps every job
+A shared formatter module (e.g. `${HERMES_HOME}/scripts/cron_style.py`) keeps every job
 consistent and lets future tweaks happen in one place. Core elements:
 
 - **Header:** emoji + bold title + italic subtitle/timestamp, then a `━━━━━━━━━━━━━━━` divider.

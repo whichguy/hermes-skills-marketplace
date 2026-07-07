@@ -3,7 +3,7 @@ name: usaw-to-schedule
 description: Read/update USA Weightlifting Technical Official (TO) sign-up & session
   schedule sheets.
 version: 1.0.0
-author: Hermes (for Jim Wiese)
+author: Hermes (for The User)
 license: MIT
 platforms:
 - linux
@@ -38,11 +38,11 @@ timekeepers, speakers, weigh-in officials) to competition sessions.
 
 ## Output format preferences (Jim)
 
-- **All times in MT** (Mountain Time) during NCW and any Venue City event.
+- **All times in MT** (Mountain Time) during NCW and any Colorado Springs event.
 - **Short labels only:** `9:30 PM` — NOT `9:30 PM MT` on every line. State the timezone once at the top of the message, not per-line.
 - **Platform as colored emoji:** 🔴 RED, ⚪ WHITE, 🔵 BLUE — not `[RED]` or plain text.
 - **Session as `S1`, `S2`** — not `Sess 1`, `Session 1`.
-- **Jim & Kelly highlighted first** with 🟦/🟪, all others below.
+- **Jim & Family Member highlighted first** with 🟦/🟪, all others below.
 
 ## When to use
 
@@ -50,14 +50,14 @@ timekeepers, speakers, weigh-in officials) to competition sessions.
 - Finding a specific person's assignments across the meet
 - Checking session times, weigh-in times, weight classes
 - Carefully updating sign-ups (only with explicit approval — these are shared,
-  owned by USAW staff, e.g. `staff@usaweightlifting.org`)
+  owned by USAW staff, e.g. `pedro.meloni@usaweightlifting.org`)
 
 ## Key documents (2026 Nationals)
 
 - **TO Sign-up Sheet** (the schedule, `.xlsx`, owned by USAW/Pedro Meloni):
-  `1KbXx2eJ1JxN6933lPkD48CHmYTBWS8-Z`
+  `1KbXx2eJ1JxN6933lPkYOUR_SLACK_CHANNEL_ID-Z`
 - **NCW 2026 Q Totals** (native Google Sheet, lookup table of event → age group →
-  gender → weight class with qualifying totals): `1WNVXSz58KfwgdTcXVX654XfgRc93fQepI1FI-kl-fHM`
+  gender → weight class with qualifying totals): `1WNVXSz58KfwgdTcXVX654XfgRYOUR_SLACK_CHANNEL_ID-kl-fHM`
 
 The workbook has one **tab per meet/event**, e.g.:
 `2026 WZA`, `VWS1`, `2026 NCW`, `2026 MC & UNI`, plus a `List of TOs` roster tab.
@@ -254,10 +254,10 @@ GAPI() {
 }
 
 # Q Totals (native Google Sheet) — read lookup table
-gapi_retry GAPI sheets get 1WNVXSz58KfwgdTcXVX654XfgRc93fQepI1FI-kl-fHM "A1:E200"
+gapi_retry GAPI sheets get 1WNVXSz58KfwgdTcXVX654XfgRYOUR_SLACK_CHANNEL_ID-kl-fHM "A1:E200"
 
 # Download the TO Sign-up workbook (.xlsx) to parse locally
-gapi_retry GAPI drive download 1KbXx2eJ1JxN6933lPkD48CHmYTBWS8-Z --output /tmp/to_signup.xlsx
+gapi_retry GAPI drive download 1KbXx2eJ1JxN6933lPkYOUR_SLACK_CHANNEL_ID-Z --output /tmp/to_signup.xlsx
 ```
 
 Parse with `scripts/parse_to_schedule.py` (lists tabs, day separators, sessions,
@@ -271,7 +271,7 @@ uv run --quiet --with openpyxl python \
 # Find one person's assignments across all tabs
 uv run --quiet --with openpyxl python \
   ${HERMES_HOME:-$HOME/.hermes}/skills/productivity/usaw-to-schedule/scripts/parse_to_schedule.py \
-  /tmp/to_signup.xlsx --person "Example Person"
+  /tmp/to_signup.xlsx --person "Family Member Wiese"
 ```
 
 ## Updating the sheet (DANGER — shared, owned by USAW)
@@ -296,7 +296,7 @@ uv run --quiet --with openpyxl python \
    clear. Keep the L/C/R row order intact when changing referees.
 4. After any change, re-parse and show Jim a diff of the affected session block.
 
-## Reminder cron (duty reminders for Jim & Kelly)
+## Reminder cron (duty reminders for Jim & Family Member)
 
 A `no_agent` cron job (`006d130492a7`, every 15 min) runs `usaw_to_reminder.py`,
 which fires TWO reminders per **person per session**, timed to their **earliest duty**:
@@ -331,8 +331,8 @@ Each fires exactly once (deduped by `person|day|sess|offset` key in
 📅 {Day} · S{N} · Start {time} MT  (Weigh-in {time} MT)
   🟦 Jim · 🔴 · ⚖️ Weigh-in @ 1:00 PM MT — {category}
   🟦 Jim · 🔵 · 🦓 Referee (Center) @ 3:00 PM MT — {category}
-  🟪 Kelly · ⚪ · ⚖️ Weigh-in @ 1:00 PM MT — {category}
-  🟪 Kelly · 🔵 · 🦓 Referee (Right) @ 3:00 PM MT — {category}
+  🟪 Family Member · ⚪ · ⚖️ Weigh-in @ 1:00 PM MT — {category}
+  🟪 Family Member · 🔵 · 🦓 Referee (Right) @ 3:00 PM MT — {category}
 ```
 
 - **Wall-clock `@ {time} MT`** on every assignment line — weigh-in time for
@@ -382,7 +382,7 @@ position indicators — use `pos_in_block` from the row order.
 
 📅 Mon Jun 22 · S15 · Start 9:00 AM MT  (Weigh-in 7:00 AM MT)
   🟦 Jim · 🔵 · 🦓 Referee (Center) @ 9:00 AM MT — 16-17yo 71kg B
-  🟪 Kelly · 🔵 · 📋 Assist Marshal @ 9:00 AM MT — 16-17yo 71kg B
+  🟪 Family Member · 🔵 · 📋 Assist Marshal @ 9:00 AM MT — 16-17yo 71kg B
 
 [📋 Schedule](https://docs.google.com/spreadsheets/d/...)
 ```
@@ -392,15 +392,15 @@ For sessions with weigh-in + another role, the wall-clock times differ per line:
 📅 Mon Jun 22 · S18 · Start 3:00 PM MT  (Weigh-in 1:00 PM MT)
   🟦 Jim · 🔴 · ⚖️ Weigh-in @ 1:00 PM MT — 16-17yo 94+kg B
   🟦 Jim · 🔵 · 🦓 Referee (Center) @ 3:00 PM MT — 16-17yo 79 kg A
-  🟪 Kelly · ⚪ · ⚖️ Weigh-in @ 1:00 PM MT — 16-17yo 69kg - 77kg B
-  🟪 Kelly · 🔵 · 🦓 Referee (Right) @ 3:00 PM MT — 16-17yo 79 kg A
+  🟪 Family Member · ⚪ · ⚖️ Weigh-in @ 1:00 PM MT — 16-17yo 69kg - 77kg B
+  🟪 Family Member · 🔵 · 🦓 Referee (Right) @ 3:00 PM MT — 16-17yo 79 kg A
 ```
 
 **Example change-watch output (with position info):**
 ```
-👇 Jim & Kelly:
+👇 Jim & Family Member:
   🟦 Jim · ✅ 8:45 AM MT · S15 Mon Jun 22 🔵 Referee (Center): New Person
-  🟪 Kelly · 🔄 8:45 AM MT · S15 Mon Jun 22 🔵 Assist Marshal: Old → New
+  🟪 Family Member · 🔄 8:45 AM MT · S15 Mon Jun 22 🔵 Assist Marshal: Old → New
 ```
 
 ### Change consolidation (role moves within a session)
@@ -450,17 +450,17 @@ State file: `/opt/data/cron_state/usaw_to/reminders_sent.json` (JSON array of se
 ## Change-watching cron (live schedule monitor)
 
 A companion cron job (`usaw_to_change_watch.py` + `usaw_to_lib.py`) watches
-the TO Sign-up xlsx for edits during the event window and alerts Jim and Kelly
+the TO Sign-up xlsx for edits during the event window and alerts Jim and Family Member
 via Telegram. It uses the Drive Revisions API (`revisions().list()`) — one cheap
 API call per tick — and only downloads + diffs the xlsx when the revision ID
 changes. See `script-first-cron-design → references/drive-revision-change-watcher.md`
 for the full 3-tier precheck-LLM pattern and the cell-level diff engine.
 
-**Delivery:** The cron job (`3a8b59f34fdd`) delivers to `telegram,whatsapp:${USAW_WHATSAPP_TO_CHANGES_GROUP}` (the "TO Changes" WhatsApp group). Both channels receive the formatted alert when any row changes. The WhatsApp group ID `${USAW_WHATSAPP_TO_CHANGES_GROUP}` is the "TO Changes" meet coordination group.
+**Delivery:** The cron job (`3a8b59f34fdd`) delivers to `telegram,whatsapp:YOUR_WHATSAPP_GROUP_ID` (the "TO Changes" WhatsApp group). Both channels receive the formatted alert when any row changes. The WhatsApp group ID `YOUR_WHATSAPP_GROUP_ID` is the "TO Changes" meet coordination group.
 
 **Cadence:** Every 15 minutes (`*/15 * * * *`), `no_agent=True` — the script outputs the final formatted message directly, zero LLM tokens.
 
-**Coverage:** The watcher tracks ALL role-column changes (not just Jim/Kelly). Jim and Kelly changes are pinned at the top with 🟦/🟪 icons. Everything else is listed below, capped at 30 lines on bulk reshuffles with `… +N more (view sheet for full list)`.
+**Coverage:** The watcher tracks ALL role-column changes (not just Jim/Family Member). Jim and Family Member changes are pinned at the top with 🟦/🟪 icons. Everything else is listed below, capped at 30 lines on bulk reshuffles with `… +N more (view sheet for full list)`.
 
 **Message format (per change line):**
 ```
@@ -470,7 +470,7 @@ emoji · time · SN Date 🔴/⚪/🔵 Role (Position): old → new
 - Platform shown as colored circle emoji: 🔴 RED, ⚪ WHITE, 🔵 BLUE
 - Session shown as `S1`, `S2` etc (not `Sess 1`)
 - **Role includes position:** `Referee (Left)`, `Referee (Center)`, `Referee (Right)`, `Chief Marshal`, `Assist Marshal` — computed from `pos_in_block` in the diff engine
-- Bulk reshuffles: Jim/Kelly shown in full, all others capped at 30 lines
+- Bulk reshuffles: Jim/Family Member shown in full, all others capped at 30 lines
 
 **Noise filter:** Template/header cells (literal strings like "Weigh in", "Speaker", "Timekeeper", "Referees (L, C, R)", "TC", "Chief Marshal Assist. Marshal", "Jury President Mem 1, Mem 2", "JR Nationals", "Youth Nationals", "SNR Nationals") are stripped from diffs — they appear when the sheet's template structure is rebuilt and are not real assignment changes.
 
@@ -510,7 +510,7 @@ for (day, sess), roles in sorted(sessions.items()):
     role_parts = [f"{PLAT_EMOJI.get(r['plat'].upper(), '⬜')} {r['role']}"
                   for r in sorted(roles, key=lambda x: x['start'] or '')]
     title = f"🏋️ NCW TO — S{sess:02d} · {' · '.join(role_parts)}"
-    location = "Venue Name, 123 Venue St, Venue City, CO VENUE_ZIP"
+    location = "Ed Robson Arena, 849 N Tejon St, Colorado Springs, CO 80903"
 
     cmd = (f'{GAPI} --account personal calendar create '
            f'--summary "{title}" --start {start_iso} --end {end_iso} '
@@ -551,7 +551,7 @@ See `references/sheet-data-analysis.md` for:
 - Workbook tab inventory (NCW, WZA, VWS1, MC & UNI, List of TOs)
 - Multi-platform conflict analysis (42 conflicts, Jim has 4 — all time-feasible)
 - Empty role slot breakdown (364 total, 19 critical)
-- Jim & Kelly workload per day
+- Jim & Family Member workload per day
 - Feature ideas ranked by impact: conflict detector, daily workload summary,
   empty slot tracker, TO roster lookup, athlete-TO cross-reference, multi-meet support
 
@@ -600,10 +600,10 @@ See `references/sheet-data-analysis.md` for:
   helper takes a cell-accessor function so it works with both `openpyxl`
   worksheet objects AND raw cell dicts from the diff engine — one function,
   two call sites, zero duplication.
-- **Safe N-day lookback test pattern (manual replay without corrupting live state):** To force-replay recent sheet changes without touching `/opt/data/cron_state/usaw_to/`, use a standalone script that (1) fetches all revisions, (2) filters to those within a CUTOFF = `now_mt - timedelta(days=N)`, (3) downloads the last revision *before* the window as the baseline, (4) walks the window revisions as diffs, and (5) posts results directly — never reading or writing the live state file. Template: `/opt/data/scripts/usaw_test_run.py`. Post to TO Changes WhatsApp directly via `requests.post("http://localhost:3000/send", json={"chatId": "${USAW_WHATSAPP_TO_CHANGES_GROUP}", "message": msg})`. To force a live-script test without corrupting state: save the state file, blank the `revisionId` key, run the script, then restore from backup.
-- **Group ID lookup:** The correct chatId for "TO Changes" is `${USAW_WHATSAPP_TO_CHANGES_GROUP}`. The old ID `${HERMES_WHATSAPP_HOME_GROUP}` goes to Jim's home/personal channel — NOT the TO Changes group. Always verify by sending a test ping before wiring up a cron. The bridge log at `/opt/data/whatsapp/bridge.log` shows outbound `chatId` values for recently sent messages — cross-reference to identify unknown groups.
+- **Safe N-day lookback test pattern (manual replay without corrupting live state):** To force-replay recent sheet changes without touching `/opt/data/cron_state/usaw_to/`, use a standalone script that (1) fetches all revisions, (2) filters to those within a CUTOFF = `now_mt - timedelta(days=N)`, (3) downloads the last revision *before* the window as the baseline, (4) walks the window revisions as diffs, and (5) posts results directly — never reading or writing the live state file. Template: `${HERMES_HOME}/scripts/usaw_test_run.py`. Post to TO Changes WhatsApp directly via `requests.post("http://localhost:3000/send", json={"chatId": "YOUR_WHATSAPP_GROUP_ID", "message": msg})`. To force a live-script test without corrupting state: save the state file, blank the `revisionId` key, run the script, then restore from backup.
+- **Group ID lookup:** The correct chatId for "TO Changes" is `YOUR_WHATSAPP_GROUP_ID`. The old ID `YOUR_WHATSAPP_GROUP_ID` goes to Jim's home/personal channel — NOT the TO Changes group. Always verify by sending a test ping before wiring up a cron. The bridge log at `/opt/data/whatsapp/bridge.log` shows outbound `chatId` values for recently sent messages — cross-reference to identify unknown groups.
 
-- **`parse_assignments(names=[""])` stores empty `person` field — use cell value instead:** When called with `names=[""]` (match everything), the function stores `person=name` where `name=""`, so every returned entry has `person: ""`. This is a bug in the current lib. Workaround: call with the explicit list `names=["James Wiese", "Example Person"]` for Jim/Kelly lookups, or patch the lib to store `v` (the cell value) instead of `name` when `name=""`. Affects `parse_assignments` and any snapshot diff built from it.
+- **`parse_assignments(names=[""])` or `names=['']` returns ZERO results — not empty person:** When called with an empty-string names list, `all_mode` is False (since `[""] != ["*"]`). The function enters named mode, matches `""` against every cell (empty string is `in` every string, so `person_name = ""`), but then `if not person_name: continue` skips every entry because empty string is falsy. Result: 0 assignments returned, not assignments with empty person fields. **Correct usage:** call `parse_assignments()` with no args (defaults to `WATCHED = ["The User", "Family Member Wiese"]`), or `names=["*"]` for all-mode (returns every assignment with `person` set to the cell value, cert tags stripped). Never pass `names=[""]` or `names=['']` — it silently returns nothing.
 
 - **No bare URLs in cron output — always Markdown hyperlinks.** Jim's preference: all URLs in notification messages must be `[label](url)` Markdown links, never bare `https://...` strings. This applies to all three TO scripts (`usaw_to_reminder.py`, `usaw_to_change_watch.py`, `ncw_alerts.py`). The reminder and athlete alert scripts already used Markdown links; the change-watch script had a bare URL at the bottom — now fixed to `📄 [Schedule](url)`.
 

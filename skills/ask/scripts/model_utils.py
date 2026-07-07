@@ -403,7 +403,7 @@ def get_reasoning_effort() -> str:
         - Caches result in module-level variable to avoid re-reading on every call.
         - Cache is reset by _invalidate_reasoning_effort_cache() (called by set_reasoning_effort).
     Dependencies:
-        - ~/.hermes/config.yaml (falls back to /opt/data/config.yaml).
+        - ~/.hermes/config.yaml (falls back to ${HERMES_HOME}/config.yaml).
         - System Python has no `yaml` module — uses manual regex/line parsing.
     # PERF: O(n) line scan on first call only — subsequent calls return cached value (~0ms).
     """
@@ -413,7 +413,7 @@ def get_reasoning_effort() -> str:
             return _reasoning_effort_cache
     config_path = os.path.expanduser("~/.hermes/config.yaml")
     if not os.path.exists(config_path):
-        config_path = "/opt/data/config.yaml"
+        config_path = "${HERMES_HOME}/config.yaml"
     try:
         with open(config_path) as f:
             in_agent = False

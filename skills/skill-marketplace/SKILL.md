@@ -39,6 +39,8 @@ the box without editing SKILL.md.
 - User asks to validate a skill before submitting
 - User asks to retrofit an existing skill for marketplace readiness
 - User asks to set up or browse the skill marketplace
+- User asks to sanitize skills before publishing (privacy audit)
+- User asks whether something is redundant with Hermes built-ins
 
 ## When NOT to Use
 
@@ -50,7 +52,7 @@ the box without editing SKILL.md.
 **Every user-tunable value must be declared in frontmatter — never hardcoded
 in scripts or prose.**
 
-A skill downloaded by Agent A in Your City, CA must work for Agent B in
+A skill downloaded by Agent A in San Ramon, CA must work for Agent B in
 London without editing a single line.
 
 | Layer | Frontmatter key | What | Runtime storage |
@@ -63,24 +65,27 @@ London without editing a single line.
 | References | `references/*.md` | Bulky docs | `${HERMES_SKILL_DIR}/references/` |
 | SKILL.md body | Prose | Triggers + procedure + pitfalls | Loaded on demand |
 
-## Design Principle: Scripted Support First
+## Design Principle: Use Hermes Built-ins, Don't Rebuild Them
 
-When building marketplace infrastructure or repeatable operations, prefer
-**scripts over agent-driven approaches**. The user explicitly wants scripted
-support maximized — cron jobs should be `no_agent=True` with script-only
-output, sync operations should be shell scripts, and validation should be
-automated Python that runs without an LLM in the loop.
+Hermes already has a full skills marketplace infrastructure. **Don't rebuild
+what exists.** Use the built-in commands:
 
-Rationale: scripts are deterministic, fast, cheap, and don't consume tokens.
-They run the same way every time. Agent loops are for reasoning, not for
-mechanical repetition.
+| Need | Hermes built-in (USE THIS) |
+|------|---------------------------|
+| Add a skill source | `hermes skills tap add <org/repo>` |
+| Browse skills | `hermes skills browse` / `hermes skills search <query>` |
+| Install a skill | `hermes skills install <identifier>` |
+| Check for updates | `hermes skills check` |
+| Apply updates | `hermes skills update` |
+| Security scan | `hermes skills audit` |
+| Publish a skill | `hermes skills publish <path> --to github --repo <org/repo>` |
 
-Apply this to:
-- Update checks → `check_updates.sh` (cron-safe, silent on no-op)
-- Skill syncing → `sync_skills.sh push/pull` (deterministic file copy + git)
-- Index generation → `generate_index.py` (scan dirs, write JSON)
-- CI validation → 5 Python scripts (exit codes, no LLM needed)
-- The only agent-driven part is authoring/editing SKILL.md content itself
+**Only build what Hermes doesn't have:** config-code separation enforcement.
+The 4 validators (`validate_skill.py`, `validate_all_skills.py`,
+`check_config_separation.py`, `scan_hardcoded_config.py`) are the only
+non-redundant infrastructure. Everything else (sync scripts, cron update
+checkers, index generators, secret scanners) is redundant with Hermes
+built-ins and should not be rebuilt.
 
 ## Procedure: Creating a Marketplace-Ready Skill
 
@@ -98,12 +103,15 @@ var, and credential the skill needs. Nothing is left implicit.
 
 ### Step 2 — Scaffold from template
 
-The marketplace repo is at `/opt/data/hermes-skills-marketplace/`. The template
-is at `skill-template/` within it.
+The marketplace repo is at `/opt/data/hermes-skills-marketplace/`. The repo
+uses a **flat structure**: `skills/<name>/SKILL.md` (no category subdirs).
+Categories are declared in `skills.sh.json` groupings, not in the directory
+structure. This is required because the Hermes Hub indexer scans only one
+level deep under the tap path.
 
 ```bash
 cp -r /opt/data/hermes-skills-marketplace/skill-template/ \
-  /opt/data/hermes-skills-marketplace/skills/<category>/<skill-name>/
+  /opt/data/hermes-skills-marketplace/skills/<skill-name>/
 ```
 
 **Completion criterion:** Directory exists with SKILL.md, scripts/, templates/, references/.
@@ -183,38 +191,35 @@ SKILL.md body does NOT contain:
 
 **Completion criterion:** SKILL.md ≤ 15k chars. `scan_hardcoded_config.py` passes.
 
-### Step 6 — Update the discovery index
+### Step 6 — Publish
 
-Add your skill to `.well-known/skills/index.json` in the marketplace repo.
-
-**Completion criterion:** `check_index_sync.py` passes.
-
-### Step 7 — Validate
+The Hermes Hub indexes the repo automatically via the GitHub Contents API.
+No manual index.json maintenance needed.
 
 ```bash
 cd /opt/data/hermes-skills-marketplace
-python scripts/validate_all_skills.py
-python scripts/check_config_separation.py
-python scripts/check_index_sync.py
-python scripts/scan_secrets.py
-python scripts/scan_hardcoded_config.py
+git add skills/<skill-name>/
+git add skills.sh.json  # if categories changed
+git commit -m "feat: add <skill-name> skill"
+git push
 ```
 
-**Completion criterion:** All 5 checks pass with zero errors.
+**Completion criterion:** Skill is pushed to GitHub. `hermes skills tap add
+whichguy/hermes-skills-marketplace` + `hermes skills search <name>` finds it.
 
-### Step 8 — Publish
+### Step 7 — Validate (config-code separation only)
+
+Only run the 4 validators that check config-code separation (Hermes built-ins
+handle the rest):
 
 ```bash
-# Option A: Hermes CLI (publishes to GitHub directly)
-hermes skills publish skills/<category>/<skill-name>/ --to github --repo <repo>
-
-# Option B: Git PR (for curated marketplace)
-git add skills/<category>/<skill-name>/
-git add .well-known/skills/index.json
-git commit -m "feat: add my-skill skill"
+cd /opt/data/hermes-skills-marketplace
+python scripts/validate_all_skills.py     # frontmatter + config declarations
+python scripts/check_config_separation.py # no hardcoded secrets in scripts
+python scripts/scan_hardcoded_config.py   # no "replace this with..." in prose
 ```
 
-**Completion criterion:** Skill is pushed to GitHub or a PR is opened.
+**Completion criterion:** All checks pass with zero errors.
 
 ## Procedure: Connecting to the Marketplace (Setup)
 
@@ -257,8 +262,8 @@ indexer. Categories are declared in `skills.sh.json` instead.
 
 ### Option B — external_dirs (for local clone, no security scan)
 
-If the marketplace repo is cloned locally (e.g., by the sync script), mount
-it directly as a skill source. No security scan, no rate limits.
+If the marketplace repo is cloned locally, mount it directly as a skill
+source. No security scan, no rate limits.
 
 ```bash
 # 1. Clone the marketplace repo
@@ -274,48 +279,92 @@ hermes config set skills.external_dirs '["/opt/data/hermes-skills-marketplace/sk
 Skills from the external dir appear alongside bundled skills. No install
 step needed — they're available immediately.
 
-### Option C — Sync Script (for the marketplace owner, bidirectional)
-
-The sync script copies skills between local `~/.hermes/skills/` and the
-marketplace GitHub repo. Best for the repo owner who wants to push changes.
-
-```bash
-# Push local skill changes to GitHub
-/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh push
-
-# Pull marketplace updates to local
-/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh pull
-
-# Check if in sync (cron-safe, silent on no-op)
-/opt/data/hermes-skills-marketplace/scripts/check_updates.sh
-
-# Show sync status
-/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh status
-```
-
-A cron job runs `check_updates.sh` every 6h and alerts when updates are
-available.
-
 ### Which option to use?
 
 | Situation | Option |
 |-----------|--------|
 | Other agents discovering your skills | A (Skills Hub tap) |
 | Local development, no security scan | B (external_dirs) |
-| Pushing your local changes to GitHub | C (sync script push) |
-| Pulling marketplace updates to local | C (sync script pull) |
-| Automated periodic update check | C (cron + check_updates.sh) |
+| Pushing your local changes to GitHub | `git add && git commit && git push` |
+| Pulling marketplace updates to local | `git pull` in the cloned repo |
+| Checking for updates | `hermes skills check` |
 
+## Procedure: Privacy Sanitization Before Publishing
+
+**This is mandatory before publishing any skill to a public repo.** Skills
+built for personal use accumulate personal data in prose, examples, and
+scripts. Publishing without sanitizing exposes personal info and is
+embarrassing at best, dangerous at worst.
+
+### Step 1 — Audit for personal information
+
+Scan every file in the skill for:
+
+- Email addresses (especially personal/corporate domains)
+- Phone numbers (10+ digit sequences, formatted phone numbers)
+- WhatsApp/messaging group IDs (e.g., `YOUR_WHATSAPP_GROUP_ID`)
+- Home address components (city name, ZIP code, street address)
+- Personal names (family members, colleagues, CPA, doctor, etc.)
+- Organization domains (your company, church, gym)
+- Venue/hotel names tied to personal events
+- TV provider, ISP, or other service subscriptions
+- IP addresses (except 127.0.0.1 and 0.0.0.0 in config examples)
+
+Use a regex scan across all files in the skill directory. See
+`references/privacy-audit-patterns.md` for the pattern list.
+
+### Step 2 — Extract personal values to config.yaml
+
+For each personal value found, extract it to `metadata.hermes.config` in the
+skill's frontmatter with a generic default. Write the real personal value to
+the user's `config.yaml` under `skills.config.<key>`.
+
+Example: `"San Ramon"` in SKILL.md prose →
+- In published SKILL.md: `config: [{key: personal.home_city, default: "Your City"}]`
+- In user's config.yaml: `skills.config.personal.home_city: "San Ramon"`
+
+### Step 3 — Replace personal values with generic defaults
+
+In every file (SKILL.md, references/*, scripts/*, templates/*), replace:
+- Personal names → "Example Person", "Family Member", "CPA Contact"
+- Email addresses → "you@example.com", "coach@your-org.org"
+- Phone numbers → "(555) 123-4567"
+- Addresses → "123 Venue St", "Venue City", "VENUE_ZIP"
+- WhatsApp group IDs → "REDACTED" or `${CONFIG_KEY}`
+- Organization domains → "your-org.org", "church-example.org"
+- Venue/hotel names → "Venue Name", "Hotel Name"
+- TV provider → "TV Provider"
+
+### Step 4 — Decide: publish vs keep private
+
+Some skills are too personal to publish at all. Criteria for keeping private:
+- Contains a relationship graph, family approval list, or personal context model
+- Contains personal schedule/timeline details (travel dates, hotel reservations)
+- Contains cron job IDs, delivery channel identifiers tied to personal accounts
+- The skill's core function is managing the user's personal life
+
+If keeping private: do NOT copy to the marketplace repo. Keep it in
+`~/.hermes/skills/` only.
+
+### Step 5 — Re-audit after sanitization
+
+Run the audit scan again on the sanitized files. Must find **zero** personal
+information before publishing.
+
+**Completion criterion:** Full re-audit finds zero matches. Personal values
 ## Procedure: Retrofitting a Single Skill
 
-1. **Audit:** List every hardcoded value in SKILL.md prose and scripts/*.py
-2. **Extract config:** Move each to `metadata.hermes.config` with a default
-3. **Extract secrets:** Move API keys to `required_environment_variables`
-4. **Rewrite scripts:** Substitute hardcoded values with `os.getenv()` calls
-5. **Move bulky content:** API specs → `references/`, formats → `templates/`
-6. **Clean SKILL.md:** Remove placeholder substitution instructions
-7. **Validate:** Run all 5 CI checks
-8. **Update index:** Add entry to `.well-known/skills/index.json`
+1. **Audit for personal info:** Run privacy audit (see Privacy Sanitization procedure)
+2. **Extract personal config:** Move personal values to `metadata.hermes.config` + `config.yaml`
+3. **Audit for hardcoded values:** List every hardcoded value in SKILL.md prose and scripts/*.py
+4. **Extract config:** Move each to `metadata.hermes.config` with a generic default
+5. **Extract secrets:** Move API keys to `required_environment_variables`
+6. **Rewrite scripts:** Substitute hardcoded values with `os.getenv()` calls
+7. **Move bulky content:** API specs → `references/`, formats → `templates/`
+8. **Clean SKILL.md:** Remove placeholder substitution instructions
+9. **Flatten directory:** Ensure `skills/<name>/SKILL.md` (no category subdirs)
+10. **Validate:** Run 4 config-code separation validators
+11. **Re-audit privacy:** Confirm zero personal info remains
 
 ## Procedure: Bulk Retrofitting Many Skills
 
@@ -338,7 +387,7 @@ When retrofitting a large library (50+ skills), automate the repetitive parts:
 6. **Run all 5 CI validators** — fix any failures, iterate.
 
 **Completion criterion:** All skills pass `validate_all_skills.py`,
-`check_index_sync.py` reports in sync, zero failures.
+zero failures.
 
 ## References
 
@@ -346,6 +395,7 @@ When retrofitting a large library (50+ skills), automate the repetitive parts:
 - `references/claude-code-learnings.md` — Research from agentskills.io spec, Anthropic's skills repo, and community marketplaces
 - `references/validator-tuning.md` — CI validator architecture, false-positive patterns, advisory vs hard-fail rules, BUILTIN_ENV set
 - `references/github-repo-setup.md` — GitHub repo creation, git identity, sync script architecture, cron integration, custom vs bundled skill detection
+- `references/privacy-audit-patterns.md` — Regex patterns for scanning skills before publishing; replacement strategy; publish-vs-private decision criteria
 
 ## Common Pitfalls
 
@@ -365,12 +415,14 @@ When retrofitting a large library (50+ skills), automate the repetitive parts:
 4. **Not declaring `platforms:`.** Always declare explicitly. If your skill
    uses `apt-get`, it's Linux only.
 
-5. **Forgetting to update index.json.** The `.well-known/skills/index.json`
-   is how `hermes skills tap add` discovers skills.
+5. **Forgetting to update `skills.sh.json`.** Categories are declared in
+   `skills.sh.json` groupings, not directory structure. When adding a skill
+   in a new category (e.g. `sports`), add the grouping and the skill name to
+   the array before pushing.
 
 6. **Using `skill_manage(action='create')` for marketplace skills.** That
    writes to `~/.hermes/skills/` (personal). Use `write_file` to the
-   marketplace repo's `skills/<category>/<name>/SKILL.md` instead.
+   marketplace repo's `skills/<name>/SKILL.md` instead.
 
 7. **Referencing user-local skills in `related_skills`.** Only reference
    skills that exist in the marketplace repo or the official Hermes repo.
@@ -406,46 +458,72 @@ When retrofitting a large library (50+ skills), automate the repetitive parts:
     "no config declared" warning should be advisory (printed but not
     exit-code failures). Only the 150k hard limit should fail CI.
 
-## Procedure: Syncing Skills with the Marketplace Repo
+13. **external_dirs name collisions cause ambiguous skill_view.** If the
+    same skill name exists in both `~/.hermes/skills/` and an external_dirs
+    path, `skill_view(name)` fails with "Ambiguous skill name" and lists
+    both paths. Fix: either don't duplicate skills in both locations, or
+    use the full categorized path (`skill_view('category/skill-name')`).
 
-The marketplace repo is on GitHub at `whichguy/hermes-skills-marketplace`.
-Scripts in `scripts/` handle all sync operations.
+14. **Privacy sanitization is mandatory before publishing.** Skills built for
+    personal use contain email addresses, phone numbers, WhatsApp group IDs,
+    home addresses, family names, and organization domains. ALWAYS run the
+    privacy audit (see Procedure: Privacy Sanitization Before Publishing)
+    before pushing to a public repo. Extract personal values to
+    `config.yaml`, replace with generic defaults in the published skill.
 
-### Push local changes to GitHub
-```bash
-/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh push
-```
+15. **Some skills are too personal to publish at all.** Skills that manage
+    relationship graphs, personal schedules, or contain cron job IDs /
+    delivery channel identifiers should stay in `~/.hermes/skills/` only.
+    Don't copy them to the marketplace repo even after sanitizing — the
+    skill's structure itself reveals personal patterns.
 
-### Pull marketplace updates to local
-```bash
-/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh pull
-```
+16. **Redundant infrastructure wastes effort.** Before building sync scripts,
+    cron update checkers, index generators, or secret scanners, check if
+    Hermes already has the capability. `hermes skills check`, `hermes skills
+    update`, `hermes skills audit`, and `hermes skills publish` cover most
+    marketplace operations. Only build what Hermes doesn't have (config-code
+    separation validators).
 
-### Check for updates (cron-safe, silent on no-op)
-```bash
-/opt/data/hermes-skills-marketplace/scripts/check_updates.sh
-```
-Exits 0 silently if in sync. Exits 1 with summary if updates available.
-
-### Show sync status
-```bash
-/opt/data/hermes-skills-marketplace/scripts/sync_skills.sh status
-```
-
-13. **GitHub Actions workflow files need `workflow` scope on the token.**
+17. **GitHub Actions workflow files need `workflow` scope on the token.**
     `gh auth` with only `repo` scope can create repos and push code, but
-    `.github/workflows/*.yml` files are rejected: `refusing to allow an OAuth
-    App to create or update workflow without workflow scope`. Fix:
+    `.github/workflows/*.yml` files are rejected. Fix:
     `gh auth refresh -h github.com -s workflow` (requires interactive device
-    code flow). Workaround: exclude workflow files from the initial commit,
-    add them after refreshing auth.
+    code flow).
 
-14. **Hermes skills tap indexer may not immediately discover new repo
-    skills.** `hermes skills tap add` registers the repo, but
-    `hermes skills search` might not find skills from a freshly added tap
-    until the hub indexer crawls it. Use the sync scripts
-    (`sync_skills.sh pull`) for immediate skill installation instead of
-    waiting for hub indexing.
+18. **Hub indexer scans only ONE level deep.** The `_list_skills_in_repo`
+    function in `tools/skills_hub.py` calls the GitHub Contents API on the
+    tap path, lists directories, and looks for `<dir>/SKILL.md` in each —
+    one level only. Category subdirs (`skills/<category>/<name>/SKILL.md`)
+    are invisible. Fix: use flat structure (`skills/<name>/SKILL.md`) +
+    `skills.sh.json` for category groupings.
+
+19. **Verify skill_view works after publishing.** Once a skill exists in both
+    the local `~/.hermes/skills/` path and the marketplace `external_dirs`
+    path, `skill_view(name)` becomes ambiguous. Either delete the duplicate
+    or always use the categorized path (`skill_view('category/skill-name')`)
+    in references and SKILL.md cross-links.
+
+20. **Config deference: don't override Hermes config in skill code examples.**
+    If Hermes already has a config key for a limit (e.g. `max_turns`,
+    `timeout`, `max_children`), skill code examples should NOT hardcode
+    `--max-turns 120` or equivalent overrides. The skill's job is to
+    document the pattern, not impose its own limits. Let Hermes config be
+    the source of truth. Only hardcode when the skill has a domain-specific
+    reason (e.g. SDLC phases need 1 turn for text-output phases). Wrong:
+    `prompt_model.py --max-turns 120`. Right: omit the flag and let the
+    script's default (None) defer to Hermes config. Add a pitfall in the
+    skill itself explaining this principle so future maintainers don't
+    re-add the override.
+
+21. **Context pollution: dispatch synthesis, don't read large files into
+    main context.** When a skill's pattern involves reading multiple
+    subagent/model output files (5-15K chars each), the synthesis step
+    should be dispatched to another model call — NOT done inline in the
+    controller's context. Loading 3-6 review files into main context
+    pollutes it with 30-90K chars that are never needed again. Wrong:
+    "Read all N output files, synthesize in your head." Right: "Dispatch
+    synthesis to GLM via prompt_model.py, read only the final consensus
+    file." The controller should only ever read the final deliverable.
 
 ## Verification Checklist
 
@@ -453,17 +531,19 @@ Exits 0 silently if in sync. Exits 1 with summary if updates available.
 - [ ] All API keys in `required_environment_variables`
 - [ ] All OAuth tokens in `required_credential_files`
 - [ ] Scripts read from `os.getenv()` — zero hardcoded user-tunable values
-- [ ] No secrets in any file (scan_secrets.py passes — real tokens only, no placeholder false positives)
+- [ ] No secrets in any file (use real token format patterns, not generic regex)
 - [ ] No placeholder substitution instructions in prose
 - [ ] SKILL.md ≤ 15k chars (advisory; 150k hard limit)
 - [ ] Output formats in `templates/`
 - [ ] Bulky docs in `references/`
 - [ ] `platforms:` declared explicitly
 - [ ] `requires_toolsets:` / `requires_tools:` declared if needed
-- [ ] `.well-known/skills/index.json` updated (check_index_sync.py passes)
-- [ ] All 5 CI checks pass
-- [ ] For bulk retrofits: `chmod u+w` on read-only bundled skills before writing
-- [ ] Validator BUILTIN_ENV set includes HERMES_HOME, HERMES_SESSION_ID, HERMES_SKILL_DIR, HERMES_GWS_BIN
-- [ ] Secret scanner excludes placeholder patterns (..., ***, YOUR_, <...>, EXAMPLE)
+- [ ] **Privacy audit passed** — zero personal info in any published file
+- [ ] **Personal values extracted** to `config.yaml` under `skills.config.*`
+- [ ] **Skill not too personal to publish** — no relationship graphs, cron IDs, or personal schedules
+- [ ] Flat structure: `skills/<name>/SKILL.md` (no category subdirs — Hub indexer is one-level-deep)
+- [ ] `skills.sh.json` updated if category groupings changed
+- [ ] 4 config-code separation validators pass
+- [ ] `hermes skills tap add` + `hermes skills search <name>` finds the skill
 - [ ] For GitHub push: `gh auth refresh -s workflow` before pushing workflow files
-- [ ] For cron setup: copy scripts to `~/.hermes/scripts/` and use `no_agent=True`
+- [ ] Did NOT rebuild Hermes built-ins (skills check/update/audit/publish)

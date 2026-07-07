@@ -43,10 +43,10 @@
 
 ## Reusable Script
 
-`/opt/data/scripts/kanban-sdlc.sh` — creates a full 5-phase SDLC chain with skills auto-injected per phase. Usage:
+`${HERMES_HOME}/scripts/kanban-sdlc.sh` — creates a full 5-phase SDLC chain with skills auto-injected per phase. Usage:
 
 ```bash
-/opt/data/scripts/kanban-sdlc.sh /opt/data/projects/<name> "goal description" [board_slug]
+${HERMES_HOME}/scripts/kanban-sdlc.sh /opt/data/projects/<name> "goal description" [board_slug]
 ```
 
 The script:

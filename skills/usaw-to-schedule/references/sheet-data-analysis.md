@@ -26,7 +26,7 @@ hypothetical. Feature ideas are ranked by impact and effort.
 
 - Columns: A=Name (with cert tag), B=Cert tag only, C=Email, D=Phone
 - Some phone fields are `#ERROR!` (import formula failures) or raw floats
-  (e.g. `17185551234.0` — missing leading `+`)
+  (e.g. `17188131274.0` — missing leading `+`)
 - Use case: quick lookup of a TO's certification level or contact info during
   the meet (finding a substitute, identifying someone on site)
 
@@ -74,9 +74,9 @@ run concurrently).
 The critical gaps (Weigh-in, Speaker, Marshal, Referee) are the ones meet
 organizers need to fill. The rest may be intentionally left open.
 
-## Jim & Kelly workload
+## Jim & Family Member workload
 
-| Day | Jim sessions | Kelly sessions | First start | Last start | Notes |
+| Day | Jim sessions | Family Member sessions | First start | Last start | Notes |
 |-----|-------------|---------------|-------------|------------|-------|
 | Sat Jun 20 | 2 | 3 | 8:00 AM | 8:00 PM | Long day |
 | Sun Jun 21 | 1 | 2 | 8:00 AM | 8:00 PM | |
@@ -94,7 +94,7 @@ organizers need to fill. The rest may be intentionally left open.
 | Speaker | 3 |
 | Marshal | 2 |
 
-### Kelly role distribution
+### Family Member role distribution
 
 | Role | Count |
 |------|-------|
@@ -131,7 +131,7 @@ organizers need to fill. The rest may be intentionally left open.
 ### 5. Athlete-TO cross-reference (low value, high effort)
 - Cross-reference `ncw_alerts.py` athlete schedule with TO assignments
 - Alert when Jim's TO assignment is same platform/session as a Fortified
-  Strength athlete (Athlete Name, Kimberly, etc.)
+  Strength athlete (ExampleAthlete, ExamplePerson, etc.)
 - Limited use — Jim already knows his athletes' schedules
 
 ### 6. Multi-meet support (low value, medium effort)

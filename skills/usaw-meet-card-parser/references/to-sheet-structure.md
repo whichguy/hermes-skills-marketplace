@@ -56,7 +56,7 @@ that are filtered and reset the counter.
 
 ## Certification tags (parenthetical in cell value)
 
-These appear in parentheses after the name: `James Wiese (NAT)`. The `tag`
+These appear in parentheses after the name: `The User (NAT)`. The `tag`
 field in the assignment dict captures the content inside the parens.
 
 | Tag | Meaning |

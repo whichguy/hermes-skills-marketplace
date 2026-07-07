@@ -35,7 +35,7 @@ Each mode includes root cause, guardrails applied, and remaining gaps.
 
 ## Mode 13: ✅ Fixed — MCP servers not available in worker profiles (2026-06-27)
 
-- **Root cause:** Profile `config.yaml` files do NOT inherit MCP server definitions from the main `/opt/data/config.yaml`. The `inherit_mcp_toolsets: true` config key only affects delegation toolset narrowing, not MCP server availability. Workers in reviewer/worker profiles can't use MCP tools (e.g., `mcp_hermes_home_directory_tree`, `mcp_wiki_search_query`) even though the orchestrator can.
+- **Root cause:** Profile `config.yaml` files do NOT inherit MCP server definitions from the main `${HERMES_HOME}/config.yaml`. The `inherit_mcp_toolsets: true` config key only affects delegation toolset narrowing, not MCP server availability. Workers in reviewer/worker profiles can't use MCP tools (e.g., `mcp_hermes_home_directory_tree`, `mcp_wiki_search_query`) even though the orchestrator can.
 - **Guardrail:** Copy the `mcp_servers:` block from the main config to each profile's `config.yaml`. This must be done alongside skill sync (Mode 12) — the two failures often co-occur.
 - **Recovery:** Add `mcp_servers:` blocks to `/opt/data/profiles/<name>/config.yaml`, then reclaim or recreate the task.
 - **Gap:** No automatic MCP config propagation — must be done manually for each new profile.

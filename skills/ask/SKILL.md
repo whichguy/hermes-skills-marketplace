@@ -8,8 +8,6 @@ description: >
   multi-turn reasoning. Replies inline with a model badge.
 version: 1.0.2
 author: agent
-license: MIT
-platforms: [linux, macos, windows]
 metadata:
   hermes:
     tags: [multi-model, prompt, productivity, alias]

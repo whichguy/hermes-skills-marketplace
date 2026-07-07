@@ -196,6 +196,78 @@ For broad approval of a scheduled research report's suggested next action:
 3. If execution reveals a harmless job-quality improvement, update the cron prompt/toolsets and report it.
 4. Do not treat broad wording as blanket approval to install repositories, add MCP servers, or enable autonomous workflows.
 
+## Self-research: weekly Hermes setup review
+
+A specialized pattern for recurring research that audits the user's own Hermes
+deployment. Unlike external topic monitoring, this job gathers local state
+first, then searches the web for improvements against that baseline.
+
+**Precheck script pattern** (`hermes_setup_research_precheck.py`):
+- Gathers: QMD status + doctor output, wiki lint summary, cron job count/errors
+  (including errored job names + scripts + last run), config hash, change
+  signature since last run
+- Tracks a composite state signature (file sizes + mtimes of wiki, config,
+  memory, QMD config) to detect what changed since last run
+- **Proposal tracker**: reads `cron/state/research_proposals_seen.json` and
+  passes prior proposals to the agent for dedup — "do NOT re-propose unless
+  circumstances have materially changed"
+- Emits a context block with 8 research areas for the LLM agent
+
+**The 8 research areas** (pragmatic, value-simplicity):
+1. QMD / semantic search (new versions, config, embedding models, community tips)
+2. Wiki / knowledge base (Karpathy pattern, Obsidian+agent, link maintenance, archiving)
+3. Memory / storage tiers (Mem0/Letta/Zep, consolidation, char limits)
+4. Cron / automation (script-first patterns, watchdog improvements)
+5. Personal context / privacy (relationship graphs, PII redaction)
+6. Email pipeline (Gmail API, email-to-knowledge, episodic memory)
+7. Backup / DR (git strategies, disaster recovery)
+8. Lifecycle (staleness, archiving, embedding drift, model upgrades)
+
+**Key design principles:**
+- The agent should focus on **deltas** — what changed since last week, not
+  re-researching everything from scratch. If a tool hasn't released a new version,
+  say "no changes" and move on.
+- **Pragmatic framing**: "value simplicity. Skip theoretical improvements with
+  low ROI." The prompt should explicitly tell the agent to not recommend changes
+  that add complexity without clear benefit.
+- **Change signature tracking** lets the agent know what's new in the local
+  setup since last run, so it can focus research on areas that actually changed.
+- **Proposal dedup**: the precheck passes prior proposal titles + dates + disposition
+  so the agent doesn't re-propose the same thing. The agent appends new proposals
+  to the tracker file after delivering.
+- Deliver to the user's primary channel (Slack/origin for Jim).
+
+### Fully Qualified Proposal Format (user preference)
+
+**When research identifies a design change that merits action, present it as a
+fully qualified proposal — not a suggestion or summary.** Each proposal must
+include ALL of these sections:
+
+1. **Problem** — what current issue/gap this addresses, quantified if possible
+2. **Recommendation** — the specific design change, detailed enough to implement
+3. **Cost-Benefit Analysis** — effort (hours), risk (low/med/high), benefit
+   (quantified: token savings, latency, reliability), ongoing cost, ROI verdict
+4. **Test Cases** — defined BEFORE the implementation plan, across three layers:
+   - Unit tests (individual functions in isolation)
+   - Mock tests (external dependencies mocked)
+   - System tests (end-to-end through the real system)
+   - Each test: name, what it verifies, given/when/then, expected result
+   - Edge cases and regression checks (what must not break)
+5. **Implementation Plan** — step-by-step tasks with file paths, dependencies,
+   migration steps, rollback plan
+   - After each test passes OR fails, evaluate whether the test suite should
+     improve (meta-loop on test quality)
+6. **Data Migration** (if applicable) — what data moves/transforms, migration
+   script outline, validation, old data handling
+
+**When NOT to propose:**
+- If research finds nothing actionable → "No actionable changes this week" and stop
+- If a finding is interesting but not worth the work → "Monitoring" with a one-line reason
+- Do NOT present half-baked ideas or suggestions without implementation detail
+
+This format is non-negotiable for this user — no proposal without tests defined
+before the implementation plan, and no proposal without a cost-benefit analysis.
+
 ## Verification
 
 Before reporting completion:

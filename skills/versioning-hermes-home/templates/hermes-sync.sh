@@ -24,6 +24,15 @@ cd "$HHOME" || { echo "hermes-sync ERROR: $HHOME missing"; exit 1; }
 export GH_NO_UPDATE_NOTIFIER=1
 export PATH="$HHOME/bin:$PATH"
 
+# Back up the branch that is actually checked out — NOT a hardcoded 'main'.
+# (A hardcoded 'origin main' silently no-ops when HEAD is any other branch.)
+# Refuse a detached HEAD: no unambiguous branch to push, never guess.
+BRANCH=$(git symbolic-ref --quiet --short HEAD || true)
+if [ -z "$BRANCH" ]; then
+  echo "⚠️ hermes-sync ABORTED — detached HEAD, refusing to push a backup to an ambiguous ref"
+  exit 3
+fi
+
 git add -A 2>/dev/null
 
 # --- Safety gate: never push sensitive paths ---
@@ -49,7 +58,7 @@ STAT=$(git diff --cached --stat | tail -1)
 
 if ! git commit -q -m "$MSG"; then echo "⚠️ hermes-sync: commit failed"; exit 1; fi
 
-if git push -q origin main; then
+if git push -q origin "$BRANCH"; then
   echo "✅ Hermes config synced to GitHub — $(git rev-parse --short HEAD)"
   echo "   $STAT"
 else

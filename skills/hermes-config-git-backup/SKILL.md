@@ -197,6 +197,8 @@ git branch -D backup-pre-squash
   ```
   Verify: `git config --list --global | grep credential` — should show exactly one entry per host.
 - **`gh` CLI path in credential helper must be absolute:** The git credential helper entry must use the **full absolute path** to `gh` (e.g. `!/opt/data/bin/gh auth git-credential`). Cron jobs run with a minimal `PATH` that won't include the directory where `gh` lives, so a bare `gh` command in the helper fails with "No such device or address" even though `gh` works interactively.
+- **Diverged git history blocks backup push — recovery pattern.** When the backup cron fails with `git push` rejected because local and remote have diverged (each side has commits the other doesn't), the `hermes-sync.sh` retry loop keeps failing because: (a) `git push` is rejected (remote ahead), (b) `git rebase` can't run because the working tree is dirty (cron ticker files, `jobs.json`, `sync_report.json` are modified by the scheduler). **Fix:** (1) `git stash` to save dirty working tree, (2) `git rebase -X theirs origin/main` — use `-X theirs` because local versions are the newer superset of conflicting files (verify with `git diff --stat origin/main...HEAD` first), (3) `git push`, (4) `git stash pop` to restore working tree. After recovery, run `hermes-sync-cron.sh` to confirm exit 0. This was encountered Jun 2026 when both local and remote had 6 independent commits after a period of concurrent edits.
+
 - **Don't rely on `GH_TOKEN` env** for persistence — write to `gh` `hosts.yml`.
 - **Verify leaks on GitHub's tree** (`gh api .../git/trees/main?recursive=1`),
   not just `git ls-files` — proves what actually left the machine.

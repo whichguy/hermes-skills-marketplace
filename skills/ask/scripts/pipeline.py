@@ -181,9 +181,13 @@ def run_pipeline(message: str, cost_budget: str = 'medium',
         elif not devloop_bridge.devloop_enabled():
             pipeline_mode = None    # operator kill-switch — intentional single-shot fallback
         elif pipeline_mode == 'test_first':
-            dispatch_result = devloop_bridge.call_guarded(devloop_bridge.run_build, message, timeout=timeout)
+            # repo=SCRATCH explicitly: a chat-originated build works in a fresh scratch workspace,
+            # never the process cwd (which can be inside the ~/.hermes data repo itself).
+            dispatch_result = devloop_bridge.call_guarded(
+                devloop_bridge.run_build, message, timeout=timeout, repo=devloop_bridge.SCRATCH)
         elif pipeline_mode == 'debug_cascade':
-            dispatch_result = devloop_bridge.call_guarded(devloop_bridge.run_debug, message, timeout=timeout)
+            dispatch_result = devloop_bridge.call_guarded(
+                devloop_bridge.run_debug, message, timeout=timeout, repo=devloop_bridge.SCRATCH)
         else:
             pipeline_mode = None    # unknown pipeline mode -> single dispatch
 

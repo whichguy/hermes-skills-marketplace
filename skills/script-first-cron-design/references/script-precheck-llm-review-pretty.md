@@ -35,7 +35,7 @@ but stating the rule explicitly in the prompt makes it reliable. Never combine
 
 ## Shared review+style prompt (the two jobs)
 
-Keep one reusable prompt block (this repo: `/opt/data/scripts/cron_review_prompt.md`)
+Keep one reusable prompt block (this repo: `${HERMES_HOME}/scripts/cron_review_prompt.md`)
 appended to every job so the standard is identical everywhere:
 
 - **Evaluate**: is anything actionable? Does anything look wrong, contradictory,
@@ -53,7 +53,7 @@ appended to every job so the standard is identical everywhere:
 - **SILENT rule** + **negative-result rule**: no "all clear" / "no items"
   messages for individual sources.
 
-A small presentation helper module (`/opt/data/scripts/cron_style.py`) gives
+A small presentation helper module (`${HERMES_HOME}/scripts/cron_style.py`) gives
 deterministic helpers (`header`, `section`, `kv`, `bullet`, `link`,
 `local_time`, `now_label`, `render`) so script-side formatting and LLM-side
 formatting share one vocabulary.

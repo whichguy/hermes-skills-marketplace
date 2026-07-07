@@ -63,7 +63,7 @@ ctx = resolver.resolve(email="someone@example.com")
 # → {"person_id": "person_ed_johnson", "circle_ids": ["circle_fortified_strength"], ...}
 
 # Or enrich a message dict in-place:
-msg = {"from": "Ed Johnson <coach@your-org.org>", "subject": "Test"}
+msg = {"from": "Ed Johnson <ed@fortifiedstrength.org>", "subject": "Test"}
 resolver.enrich_message(msg)
 # msg now has person_id, person_name, circle_ids, sender_is_known, priority_hint, style_hint
 ```
@@ -78,7 +78,7 @@ resolver.enrich_message(msg)
       "display_name": "Ed Johnson",
       "aliases": {
         "names": ["Ed Johnson"],
-        "emails": ["coach@your-org.org", "coach.alt@example.com"]
+        "emails": ["ed@fortifiedstrength.org", "coachedj@gmail.com"]
       },
       "circle_ids": ["circle_fortified_strength"]
     }
@@ -257,9 +257,19 @@ _recently_surfaced = RecentlySurfaced()
 _episode_store = EpisodeStore()
 
 def minimal(account, msg, drafted_threads=None):
-    """Enrich a message with person context, thread state, and episode context."""
+    """Enrich a message with person context, thread state, episode context, and breadcrumbs."""
     _people_resolver.enrich_message(msg)
     ep_ctx = _episode_store.get_episode_context(account, msg.get('threadId', ''))
+
+    # Breadcrumbs (token-efficient pre-triage signals)
+    from inbox_triage_precheck import (
+        compute_age_hours, age_breadcrumb, extract_domain,
+        detect_urgency, detect_skip_signals, detect_label_flags, compact_snippet,
+    )
+    snippet = msg.get('snippet', '')
+    age_h = compute_age_hours(msg)
+    skip_hint = detect_skip_signals(snippet, msg.get('subject', ''), msg.get('from', ''))
+
     return {
         'account': account,
         'id': msg.get('id'),
@@ -272,6 +282,15 @@ def minimal(account, msg, drafted_threads=None):
         'sender_is_known': msg.get('sender_is_known', False),
         'priority_hint': msg.get('priority_hint'),
         'episode_context': ep_ctx,
+        # Breadcrumbs
+        'depth': 1,                    # hint only; fetch for real depth
+        'age_h': age_h,                # hours since send (float)
+        'age': age_breadcrumb(age_h),  # compact '2h'/'1d'/'3d' or None if <6h
+        'domain': extract_domain(msg.get('from', '')),
+        'urgency': detect_urgency(snippet, msg.get('subject', '')),
+        'skip_hint': skip_hint,        # pre-classified skip reason or None
+        'flags': detect_label_flags(msg.get('labels', [])),
+        'snippet': compact_snippet(snippet),  # 120-char compacted
     }
 
 # After surfacing threads, mark them:
@@ -282,6 +301,55 @@ for msg in surfaced_messages:
         subject=msg.get('subject', ''),
         status='active')
 ```
+
+### 6. Breadcrumb Enrichment Functions (shared)
+
+Token-efficient pre-triage signals extracted from metadata-only fields. These let
+the agent SKIP obvious noise or FETCH for context without reading the full thread
+body, saving Gmail API calls and LLM tokens. Defined in `inbox_triage_precheck.py`
+and imported by `email_wiki_precheck.py`.
+
+```python
+from inbox_triage_precheck import (
+    compute_age_hours, age_breadcrumb, extract_domain,
+    detect_urgency, detect_skip_signals, detect_label_flags,
+    compact_snippet,
+)
+
+# Age — compact breadcrumb for staleness
+age_h = compute_age_hours(msg)       # → 2.6 (float hours since send)
+age_b = age_breadcrumb(age_h)        # → None (<6h), '7h', '1d', '3d', '1w'
+
+# Domain — quick sender recognition without parsing From header
+domain = extract_domain("John <john@example.com>")  # → "example.com"
+
+# Urgency — deadline/scheduling/payment/action signals from snippet+subject
+urgency = detect_urgency(snippet, subject)  # → 'deadline' | 'scheduling' | None
+
+# Skip hint — pre-classified skip reason from metadata alone
+skip = detect_skip_signals(snippet, subject, from_header)
+# → 'bulk/no-reply sender' | 'transactional/auto-confirm' | 'newsletter/digest' | None
+
+# Label flags — Gmail label signals
+flags = detect_label_flags(labels)  # → ['IMPORTANT', 'STARRED'] subset
+
+# Compact snippet — 120 chars, whitespace-collapsed
+snip = compact_snippet(raw_snippet)  # → "Your order has been shipped..."
+```
+
+**Breadcrumb fast-path rules** (for the agent consuming the payload):
+- `skip_hint` is set → SKIP without fetching (bulk/transactional/newsletter)
+- `thread_state=awaiting_reply` → SKIP (Jim already replied)
+- `urgency` is set → fetch first, prioritize
+- `flags` includes IMPORTANT/STARRED → fetch for context
+- `depth≥3` → fetch (likely a negotiation/discussion)
+- When in doubt, always fetch — breadcrumbs are a fast-path, not a replacement
+
+**Pattern detection details:**
+- **BULK_DOMAINS**: checks local-part of sender for `noreply`, `no-reply`, `donotreply`, `mailer`, `notification`, `notify`, `alerts`, `auto`, `googlegroups`
+- **URGENCY_PATTERNS**: regex matches for `deadline|due|expires|urgent|asap|action required` → deadline; `reminder|follow.?up|overdue` → reminder; `invoice|payment|balance` → payment; `meeting|call|schedule|appointment` → scheduling; `confirm|confirmation|rsvp` → action
+- **SKIP_SNIPPET_PATTERNS**: `unsubscribe`, `manage your notifications`, `view this email in your browser`, `no-?reply`, `do not reply`, `automated message`, `confirmation (number|code|id):`, `tracking (number|id):`, `your (order|shipment|delivery) (has been|is|was)`
+- **SKIP_SUBJECT_PATTERNS**: `[newsletter|digest|weekly|monthly]`, `weekly/monthly (digest|newsletter|update)`, `your (order|shipment|delivery|statement|bill|receipt|payment|ride|invoice)`
 
 ## Privacy
 

@@ -6,7 +6,7 @@
 |------|-----------------|
 | `/opt/data/cron_state/usaw_to/to_signup.xlsx` | Live sheet download — names ARE here |
 | `/opt/data/cron_state/usaw_to/assignments_snapshot.json` | Structure only — `person` fields are always empty |
-| `/opt/data/scripts/usaw_to_lib.py` | Library: `parse_assignments()`, `XLSX_PATH`, `TAB` |
+| `${HERMES_HOME}/scripts/usaw_to_lib.py` | Library: `parse_assignments()`, `XLSX_PATH`, `TAB` |
 
 ## Tab scoped to current event
 
@@ -44,7 +44,7 @@ wiese = [a for a in data if 'wiese' in a.get('person','').lower()]  # returns []
 
 | Field | Example | Notes |
 |-------|---------|-------|
-| `person` | `"Example Person"` | Full name as it appears in sheet |
+| `person` | `"Family Member Wiese"` | Full name as it appears in sheet |
 | `day` | `"2026-06-21"` | ISO date string |
 | `sess` | `11` | Session number (int) |
 | `plat` | `"BLUE"` | Platform: RED/WHITE/BLUE |
@@ -67,8 +67,8 @@ PLAT = {'RED': '🔴', 'WHITE': '⚪', 'BLUE': '🔵'}
 As of Jun 21, 2026 sheet snapshot: **37 assignments** across 4 days (Jun 20–23).
 No assignments visible after Tue Jun 23 — later sessions may not yet be populated.
 
-- **Jim (James Wiese)** 🟦: 19 assignments
-- **Example Person** 🟪: 18 assignments
+- **Jim (The User)** 🟦: 19 assignments
+- **Family Member Wiese** 🟪: 18 assignments
 - Both primarily on 🔴 RED platform, NAT tag
 - Roles: Referee (most common), Weigh-in, Speaker, Marshal
 

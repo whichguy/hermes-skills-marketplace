@@ -1,5 +1,12 @@
 # WhatsApp Reconnect Troubleshooting (Jim's OrbStack/Docker setup)
 
+> **Current deployment (Jun 29 2026):** Node dependencies are baked into the
+> `hermes-agent:stable` security overlay at
+> `/opt/hermes/scripts/whatsapp-bridge/node_modules`. Only the session persists
+> under `/opt/data`. The persistent `bridge_modules` and `whatsapp-bridge-fix.sh`
+> procedures below are retained as incident history; do not execute them. For a
+> dependency or ownership failure, run `~/.hermes/scripts/update-hermes-overlay.sh`.
+
 ## The recurring failure pattern (Jun 2026, confirmed)
 
 ### Symptom
@@ -21,7 +28,7 @@ docker exec -it hermes /opt/hermes/bin/hermes whatsapp   # scan QR on bot phone
 docker exec -it hermes /opt/hermes/bin/hermes gateway restart
 ```
 
-#### 2. Watchtower killed bridge mid-session (SIGTERM / exit code -15)
+#### 2. Watchtower killed bridge mid-session (historical; SIGTERM / exit code -15)
 Watchtower auto-updates the container image during active use, sending SIGTERM to
 the bridge. After the new image starts, the gateway's reconnect loop fails because
 the bridge crashes on startup (root-owned `node_modules`).
@@ -297,10 +304,10 @@ so the gateway never calls npm at all.
 ## Truly permanent fix: boot-time init script via docker-compose volume mount
 
 The cleanest solution that survives all Watchtower updates without an image rebuild:
-store a fix script in `/opt/data/scripts/` (persistent volume) and mount it into the
+store a fix script in `${HERMES_HOME}/scripts/` (persistent volume) and mount it into the
 container as a `cont-init.d` script that runs as root on every boot.
 
-**Step 1: create the fix script** (already present at `/opt/data/scripts/whatsapp-bridge-fix.sh`).
+**Step 1: create the fix script** (already present at `${HERMES_HOME}/scripts/whatsapp-bridge-fix.sh`).
 If missing, recreate it — the script does:
 - Ensures `/opt/data/whatsapp/bridge_modules/` exists and is `hermes:hermes`
 - Removes and recreates the `node_modules` symlink as `hermes:hermes` if needed
@@ -401,7 +408,7 @@ before the gateway process starts (via the CMD / Architecture B main-wrapper).
 | Gateway expects session at | `/opt/data/platforms/whatsapp/session/` |
 | Bridge script | `/opt/hermes/scripts/whatsapp-bridge/bridge.js` |
 | Baileys node_modules | `/opt/hermes/scripts/whatsapp-bridge/node_modules/@whiskeysockets/baileys` |
-| Persistent node_modules | `/opt/data/whatsapp/bridge_modules/` |
+| Persistent node_modules | None; dependencies belong to the overlay image |
 | Pkg hash stamp | `/opt/hermes/scripts/whatsapp-bridge/node_modules/.hermes-pkg-hash` |
 
 ## Important: agent cannot self-restart gateway
@@ -412,8 +419,8 @@ from a **Mac host terminal** via `docker exec -it hermes ...`
 ## WhatsApp group IDs (Jim's known groups)
 | Group | Chat ID |
 |---|---|
-| Kelly's group (active, "can you reply to this group?") | `${HERMES_WHATSAPP_KELLY_GROUP}` |
-| TO Changes | `${HERMES_WHATSAPP_HOME_GROUP}` |
+| Family Member's group (active, "can you reply to this group?") | `YOUR_WHATSAPP_GROUP_ID` |
+| TO Changes | `YOUR_WHATSAPP_GROUP_ID` |
 
 To identify an unknown group: have someone send a message from it to the bot,
 then `grep "inbound message: platform=whatsapp" /opt/data/logs/gateway.log | tail -5`
