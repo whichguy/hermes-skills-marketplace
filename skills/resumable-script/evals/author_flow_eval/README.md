@@ -25,33 +25,41 @@ scenario's `expect`) plus per-scenario **evidence** over what actually happened:
 ## Shape: one test, many suites
 There is exactly one test body — `test_authoring_e2e(scenario)` — and every suite points at it.
 `scenarios.SCENARIOS` is a dict of suites (`L1`…`L6`); each scenario becomes a parametrized case tagged
-with its suite's marker.
+with its suite's marker. L1-L5 cover the current interpreter kinds. L6 tracks the historical/planned
+`agent` + state-MCP surface and is skipped while `agent` is absent from `workflow._KINDS`.
 
 ```
 cheatsheet.py   the ${...} format taught to the authoring model + the fixed run-fn names
 authoring.py    author_spec() -> hermes -z (via oneshot.run_docker_exec) + bounded repair loop
-wrapper.py      write_flow() -> runnable flow file; binds BOTH real-model callers (llm= and agent=)
-bridge.py       docker_agent_caller (agent kind, MCP state) + docker_llm_caller (prompt kind)
+wrapper.py      write_flow() -> runnable flow file; binds the real-Hermes llm/router caller
+bridge.py       docker_llm_caller (prompt/router); docker_agent_caller remains for future L6 revival
 answerer.py     a real LLM plays the human at each suspension, steered by the scenario's `intent`
 driver.py       run_scenario() -> THE one shared e2e function (invariants + evidence live here)
 scenarios.py    SCENARIOS = {"L1": [...], ...} — pure data, the suites
 test_*.py       one parametrized test; suites are markers
-conftest.py     live_env fixture — skips (never fails) when Hermes/Ollama are down; registers state MCP
-env_setup.py    probes + one-time state-MCP registration in the container
+conftest.py     live_env fixture — skips (never fails) when Hermes/Ollama are down
+env_setup.py    probes + optional state-MCP registration for scenarios that need it
 ```
 
 ## Running
+From the skill root (`skills/resumable-script`):
+
 ```bash
-# one-time
+# one-time pytest environment for this live eval
 python3 -m venv evals/.venv && evals/.venv/bin/pip install pytest
 
-# a single suite / the whole ladder (run from evals/)
-evals/.venv/bin/pytest author_flow_eval -m L1 -v
-evals/.venv/bin/pytest author_flow_eval -v
+# a single suite / the whole ladder.
+# Run this from the host checkout: the harness uses docker exec hermes ... hermes -z
+# so the authoring/model work happens in the Hermes container.
+evals/.venv/bin/pytest evals/author_flow_eval -m L1 -v
+evals/.venv/bin/pytest evals/author_flow_eval -v
 ```
 Requires the `hermes` container (`docker ps`) and Ollama at `localhost:11434`. With either down, every
 case is **skipped**, not failed. Backend defaults to whatever `hermes -z` is configured for
 (`glm-5.2:cloud`); override with `RESUMABLE_EVAL_MODEL` / `RESUMABLE_EVAL_PROVIDER`.
+
+The default offline suite (`python3 tests/run.py`) also pins the eval wrapper's declaration-order
+regression without requiring pytest or live models.
 
 ## Non-determinism is data, not hidden
 Author, workflow steps, and the gate-answering human are all real models, so each scenario has an
@@ -68,11 +76,14 @@ The last valid authored spec per scenario is saved to `fixtures/<id>.json`. Both
 | L3 | a model step routes at runtime on state validity | same task: valid input → completed, invalid → `@fail` |
 | L4 | a reviewer demands a revision; the graph loops back | ≥2 suspensions + a `#visit≥1` journal key |
 | L5 | run 2 (same authored flow) references run 1's final state | run-1 canary + run-2 canary both in run 2's gate prompt |
-| L6 | an agent reads state via `get_state`, records a risk via `set_state` | customer canary in prompt + `low/medium/high` leaf in final state |
+| L6 | skipped until the `agent` kind is restored; intended to read state via MCP and record risk | customer canary in prompt + `low/medium/high` leaf in final state |
 
 ## Format findings this eval has surfaced
 - Authoring models invent input field names unless given the input's **shape** — the harness now
   auto-derives field names/types (never values) from each scenario's input and appends them to the task.
+- Cross-run authoring needs the second run's input **shape** too. The current harness can provide an
+  `input2_shape` hint for scenarios that pass a prior run's final state into the next run, while still
+  keeping canary values hidden from the authoring model.
 - The `$${` escape collides with natural currency phrasing: `"for $${$.amount}"` renders as dead
   literal text, and there is currently **no way** to express a literal `$` immediately before a hole.
   The cheatsheet warns authors off it; a real fix would be an engine-level escape change (e.g.

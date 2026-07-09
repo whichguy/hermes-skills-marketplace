@@ -55,7 +55,7 @@ cd "$HERMES_HOME"
 |---|---|
 | `Path('/opt/data/...')` | `HERMES_HOME / "..."` |
 | `Path("/opt/data/cron/jobs.json")` | `HERMES_HOME / "cron/jobs.json"` |
-| `'${HERMES_HOME}/state.db*'` (glob) | `str(HERMES_HOME / 'state.db*')` |
+| `'/opt/data/state.db*'` (glob) | `str(HERMES_HOME / 'state.db*')` |
 | `glob.glob('/opt/data/*.lock')` | `glob.glob(str(HERMES_HOME / '*.lock'))` |
 | `"/opt/hermes/.venv/bin/hermes"` | `os.environ.get("HERMES_BIN", "/opt/hermes/.venv/bin/hermes")` |
 | `sys.path.insert(0, "/opt/data/scripts")` | `sys.path.insert(0, str(HERMES_HOME / "scripts"))` |

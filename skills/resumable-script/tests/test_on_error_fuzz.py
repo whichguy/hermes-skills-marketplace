@@ -1,5 +1,4 @@
 import re
-import json
 import sys
 
 def _match_rule_local(rules, err):

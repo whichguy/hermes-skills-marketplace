@@ -355,6 +355,12 @@ grep, (2) missing `import os`, hardcoded binary paths (`/usr/bin/git`),
 - **`memories/` and `personal-context/`.** memories/ is OK only in a *private*
   repo and only with the user's yes. personal-context/ mixes custom scripts with
   sensitive relationship data + `audit-log.jsonl` — default to EXCLUDE.
+- **Nested `.gitignore` files override parent rules.** If a subdirectory has its
+  own `.gitignore` (e.g. `ui-tui/.gitignore` with `dist/`), the root's
+  `!/path/to/dist/` un-ignore is silently ignored — git uses the innermost
+  applicable rule. Fix the nested file too. Also, the nested `.gitignore` itself
+  may be ignored by the root `/*` pattern — add `!/path/to/.gitignore` to the
+  root allow-list so it can be tracked and committed.
 - **`gh` not on PATH / no sudo.** Install userspace: download the release tarball
   for the right arch and drop the binary in `~/bin` or `$HERMES_HOME/bin`. No root.
 - **Don't trust "pushed" — verify the remote tree.** Re-run the secret grep

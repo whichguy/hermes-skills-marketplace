@@ -2,10 +2,9 @@ import os
 import subprocess
 import tempfile
 import json
-import shutil
 import sys
 
-ROOT = "/opt/data/skills/resumable-script"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPTS = os.path.join(ROOT, "scripts")
 ENGINE = os.path.join(SCRIPTS, "engine.py")
 
@@ -16,7 +15,7 @@ import os
 SPEC = {
     "id": "fuzz_map", "version": 1, "start": "fan",
     "states": {
-        "fan": {"map": {"over": "$.input.items", "as": "it", "do": {"run": "work"}, 
+        "fan": {"map": {"over": "$.input.items", "as": "it", "do": {"run": "work"},
                         "on_item_error": os.environ.get("MODE", "fail"),
                         "retries": int(os.environ.get("RETRIES", "0"))},
                 "reduce": {"run": "join"}, "next": "@done"},
@@ -40,15 +39,15 @@ def run_fuzz():
         flow_path = os.path.join(td, "flow.py")
         with open(flow_path, "w") as f:
             f.write(FLOW_SRC)
-        
+
         env = os.environ.copy()
         env["PYTHONPATH"] = SCRIPTS
-        
+
         # 1. Huge list (1000 items)
         print("Testing huge list (1000 items)...")
         input_data = {"items": [{"x": i} for i in range(1000)]}
         res = subprocess.run([
-            sys.executable, ENGINE, "run", 
+            sys.executable, ENGINE, "run",
             "--flow", flow_path,
             "--input", json.dumps(input_data),
             "--state-dir", os.path.join(td, "huge")
@@ -66,7 +65,7 @@ def run_fuzz():
         print("Testing empty list...")
         input_data = {"items": []}
         res = subprocess.run([
-            sys.executable, ENGINE, "run", 
+            sys.executable, ENGINE, "run",
             "--flow", flow_path,
             "--input", json.dumps(input_data),
             "--state-dir", os.path.join(td, "empty")
@@ -86,7 +85,7 @@ def run_fuzz():
         env["MODE"] = "fail"
         env["FAIL_IDX"] = "1"
         res = subprocess.run([
-            sys.executable, ENGINE, "run", 
+            sys.executable, ENGINE, "run",
             "--flow", flow_path,
             "--input", json.dumps(input_data),
             "--state-dir", os.path.join(td, "fail_mode")
@@ -102,7 +101,7 @@ def run_fuzz():
         env["MODE"] = "skip"
         env["FAIL_IDX"] = "1"
         res = subprocess.run([
-            sys.executable, ENGINE, "run", 
+            sys.executable, ENGINE, "run",
             "--flow", flow_path,
             "--input", json.dumps(input_data),
             "--state-dir", os.path.join(td, "skip_mode")
@@ -122,7 +121,7 @@ def run_fuzz():
         env["MODE"] = "collect"
         env["FAIL_IDX"] = "1"
         res = subprocess.run([
-            sys.executable, ENGINE, "run", 
+            sys.executable, ENGINE, "run",
             "--flow", flow_path,
             "--input", json.dumps(input_data),
             "--state-dir", os.path.join(td, "collect_mode")
@@ -145,7 +144,7 @@ def run_fuzz():
         large_val = "x" * 100000
         input_data = {"items": [large_val]}
         res = subprocess.run([
-            sys.executable, ENGINE, "run", 
+            sys.executable, ENGINE, "run",
             "--flow", flow_path,
             "--input", json.dumps(input_data),
             "--state-dir", os.path.join(td, "large")
@@ -153,7 +152,7 @@ def run_fuzz():
         if res.returncode != 0:
             print(f"Large items failed: {res.stderr}")
             return 1
-        
+
         # Verify blobs directory
         blobs_dir = os.path.join(td, "large", "blobs")
         if not os.path.exists(blobs_dir) or not os.listdir(blobs_dir):
@@ -162,6 +161,7 @@ def run_fuzz():
         print("  PASS large items")
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(run_fuzz())

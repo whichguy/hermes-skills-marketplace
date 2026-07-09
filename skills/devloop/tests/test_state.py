@@ -125,6 +125,74 @@ def test_read_learnings_filters_non_dict_lines():
         assert state.read_learnings(p, 20) == [{"a": 1}, {"b": 2}]
 
 
+# --- Tests for on_rebuild_fail, on_repair, on_replan, append_learning ---
+
+def test_on_rebuild_fail_increments_count():
+    """on_rebuild_fail increments the rebuild_count counter."""
+    s = {"rebuild_count": 0}
+    state.on_rebuild_fail(s)
+    assert s["rebuild_count"] == 1
+    state.on_rebuild_fail(s)
+    assert s["rebuild_count"] == 2
+
+
+def test_on_rebuild_fail_starts_from_zero_when_missing():
+    """on_rebuild_fail starts from 0 when the key is missing (default)."""
+    s = {}
+    state.on_rebuild_fail(s)
+    assert s["rebuild_count"] == 1
+
+
+def test_on_repair_resets_counters():
+    """on_repair resets both rebuild_count and replan_count to 0."""
+    s = {"rebuild_count": 3, "replan_count": 2}
+    state.on_repair(s)
+    assert s["rebuild_count"] == 0
+    assert s["replan_count"] == 0
+
+
+def test_on_replan_increments_and_resets_rebuild():
+    """on_replan increments replan_count and resets rebuild_count (local retries reset)."""
+    s = {"replan_count": 1, "rebuild_count": 2}
+    state.on_replan(s)
+    assert s["replan_count"] == 2
+    assert s["rebuild_count"] == 0
+
+
+def test_on_replan_starts_from_zero_when_missing():
+    """on_replan starts from 0 when replan_count is missing."""
+    s = {}
+    state.on_replan(s)
+    assert s["replan_count"] == 1
+    assert s["rebuild_count"] == 0
+
+
+def test_append_learning_writes_json_line():
+    """append_learning writes one JSON line to the learnings file."""
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "learnings.jsonl")
+        state.append_learning(p, {"test": "data", "n": 1})
+        state.append_learning(p, {"test": "more", "n": 2})
+        # Read back and verify
+        lines = open(p).read().strip().split("\n")
+        assert len(lines) == 2
+        import json as _json
+        assert _json.loads(lines[0]) == {"test": "data", "n": 1}
+        assert _json.loads(lines[1]) == {"test": "more", "n": 2}
+
+
+def test_append_learning_roundtrips_with_read_learnings():
+    """append_learning + read_learnings roundtrip preserves the entries."""
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "lessons.jsonl")
+        for i in range(5):
+            state.append_learning(p, {"iteration": i, "result": "pass" if i % 2 == 0 else "fail"})
+        learned = state.read_learnings(p, 10)
+        assert len(learned) == 5
+        assert learned[0]["iteration"] == 0
+        assert learned[4]["iteration"] == 4
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

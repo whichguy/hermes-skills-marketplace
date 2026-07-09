@@ -47,7 +47,7 @@ and the devloop fixes from the 2026-07-05 session.
 ### Split decisions (2/3 agreed)
 
 - **Attendee privacy caveat** (Kimi + Minimax): Solo business trips should ASK
-  before adding Family Member, not auto-recommend. Applied as privacy considerations
+  before adding Kelly, not auto-recommend. Applied as privacy considerations
   note in the Attendee Advice section.
 
 ### Noted (1/3)

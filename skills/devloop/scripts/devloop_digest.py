@@ -23,15 +23,13 @@ Exit codes:
 """
 
 from __future__ import annotations
-from collections import Counter, defaultdict
-
 
 import argparse
 import json
 import os
 import statistics
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
@@ -56,14 +54,27 @@ def _parse_progress(progress_path: Path) -> dict | None:
 
     Returns None on corrupt/empty traces. Does NOT raise — one bad trace
     should not poison the digest.
-    
-    Progress.jsonl format (from loop.py):
-        {"ts": timestamp, "step": phase-name, "detail": "", "ok": bool|null, "elapsed_s": float}
+
+    Progress.jsonl format (from loop.py ``_progress_event``):
+        Each line is a JSON object with at least:
+          {"ts": float_epoch, "step": str, ...event_fields}
+
+    Key steps and their fields:
+      - "charter_result": {n_criteria, n_assumptions, n_blocking, tiers}
+      - "charter":        {ok, detail}  (announcement only)
+      - "roadmap":        {phases: [...]}
+      - "judge":          {ok, trusted, total, verdicts: [{criterion, judge_a, judge_b, ...}]}
+      - "evidence":       {ok, attempt, passed, total, red: [...], per_criterion: {cid: bool}}
+      - "stop_check":     {ok, detail}
+      - "regression":     {ok, detail}
+      - "overfit_audit":  {ok, detail}
+      - "terminal":       {terminal: "COMPLETE"|"HUMAN_REVIEW"|"NO_TERMINATION", reason, ...}
+      - "complete":       {ok, detail}  (announcement before terminal)
     """
     if not progress_path.exists() or progress_path.stat().st_size == 0:
         return None
 
-    events = []
+    events: list[dict] = []
     try:
         with open(progress_path) as f:
             for line in f:
@@ -78,52 +89,99 @@ def _parse_progress(progress_path: Path) -> dict | None:
     if not events:
         return None
 
-    # Extract terminal from last progress step or "complete" ending
-    terminal = "COMPLETE"
+    terminal = None
     reason = ""
-    
-    # Find the last step to determine terminal status
-    for ev in reversed(events):
-        step = ev.get("step", "")
-        ok = ev.get("ok")
-        if step == "complete":
-            terminal = "COMPLETE"
-            break
-        elif ok is False:
-            # A failed step indicates HUMAN_REVIEW or failure
-            terminal = "HUMAN_REVIEW"
-            reason = f"failed at {step}"
-            break
-    
-    # Wall-clock duration from progress data
-    durations = [e.get("elapsed_s") for e in events if e.get("elapsed_s") is not None]
-    duration_s = durations[-1] if durations else None
+    intent = ""
+    n_criteria = 0
+    judge_verdicts: list[dict] | None = None
+    evidence_results: list[dict] = []
+    rebuilds = 0
+    overfit_suspects: list[str] = []
+    ts_first: float | None = None
+    ts_last: float | None = None
 
-    # First timestamp as run_dt
-    ts_first = None
-    run_dt = None
     for ev in events:
+        step = ev.get("step", "")
         ts = ev.get("ts")
+
+        # Track time range
         if ts is not None:
-            ts_first = ts
-            break
+            if ts_first is None or ts < ts_first:
+                ts_first = ts
+            if ts_last is None or ts > ts_last:
+                ts_last = ts
+
+        if step == "charter_result":
+            n_criteria = ev.get("n_criteria", 0)
+        elif step == "coverage":
+            # Fallback: coverage step also carries n_criteria
+            n_criteria = ev.get("n_criteria", n_criteria)
+        elif step == "judge":
+            # Only capture the summary event (has verdicts), skip per-criterion detail lines
+            if "verdicts" in ev:
+                judge_verdicts = ev.get("verdicts")
+        elif step == "evidence":
+            evidence_results.append({
+                "criterion": "",
+                "passed": ev.get("passed", 0),
+                "total": ev.get("total", 0),
+                "red": ev.get("red", []),
+                "per_criterion": ev.get("per_criterion", {}),
+                "attempt": ev.get("attempt", 0),
+            })
+        elif step == "rebuild_fail":
+            rebuilds += 1
+        elif step == "overfit_audit":
+            # Overfit suspects are in the detail string, not a structured field
+            detail = ev.get("detail", "")
+            # e.g. "3 criteria x 2 auditors" — no structured suspect list in progress.jsonl
+            # Leave suspects empty; trace.jsonl fallback has richer overfit data
+            pass
+        elif step == "terminal":
+            terminal = ev.get("terminal", "")
+            reason = ev.get("reason", "")
+
+    # Fallback: if no explicit terminal event, infer from last step
+    if terminal is None:
+        last_ev = events[-1]
+        last_step = last_ev.get("step", "")
+        if last_step == "complete":
+            terminal = "COMPLETE"
+        elif last_ev.get("ok") is False:
+            terminal = "HUMAN_REVIEW"
+            reason = f"failed at {last_step}"
+        else:
+            terminal = "INTERRUPTED"
+
+    # Wall-clock duration: prefer ts delta, fallback to elapsed_s field
+    duration_s = None
+    if ts_first is not None and ts_last is not None:
+        duration_s = round(ts_last - ts_first, 1)
+    else:
+        durations = [e.get("elapsed_s") for e in events if e.get("elapsed_s") is not None]
+        if durations:
+            last_dur = durations[-1]
+            if last_dur is not None:
+                duration_s = round(float(last_dur), 1)
+
+    # Parse timestamp for run_dt
+    run_dt = None
     if ts_first is not None:
         try:
             run_dt = datetime.fromtimestamp(ts_first, tz=timezone.utc)
         except (OSError, ValueError):
             pass
 
-    # Fill in defaults since progress.jsonl doesn't have all fields
     return {
         "terminal": terminal,
         "reason": reason or "",
-        "intent": "",
-        "n_criteria": 0,
-        "duration_s": round(duration_s, 1) if duration_s else None,
-        "rebuilds": 0,
-        "overfit_suspects": [],
-        "judge_verdicts": None,
-        "evidence_results": [],
+        "intent": intent,
+        "n_criteria": n_criteria,
+        "duration_s": duration_s,
+        "rebuilds": rebuilds,
+        "overfit_suspects": overfit_suspects,
+        "judge_verdicts": judge_verdicts,
+        "evidence_results": evidence_results,
         "run_dt": run_dt,
         "_schema_mismatch": False,
     }
@@ -317,6 +375,23 @@ def _scan_traces(traces_dir: Path, hours: int, now: datetime) -> list[dict]:
         grounding = _parse_grounding(entry / "grounding.json")
         if grounding:
             run_data["grounding"] = grounding
+            # If using progress.jsonl (no intent), pull intent from grounding
+            if not run_data.get("intent") and grounding.get("intent"):
+                run_data["intent"] = grounding["intent"]
+
+        # If still no intent, try trace.jsonl for the charter event
+        if not run_data.get("intent"):
+            trace_path = entry / "trace.jsonl"
+            if trace_path.exists():
+                try:
+                    with open(trace_path) as f:
+                        for line in f:
+                            ev = json.loads(line.strip())
+                            if ev.get("step") == "charter":
+                                run_data["intent"] = ev.get("intent", "")
+                                break
+                except (json.JSONDecodeError, OSError):
+                    pass
 
         runs.append(run_data)
 
@@ -400,12 +475,31 @@ def generate_digest(runs: list[dict], learnings: list[dict], hours: int) -> str:
                 reason = r["reason"][:120]
                 lines.append(f"  └ reason: {reason}")
 
-            # Evidence failures
-            failed_ev = [e for e in r.get("evidence_results", []) if not e.get("passed")]
-            if failed_ev:
-                failed_cids = [e["criterion"] for e in failed_ev if e.get("criterion")]
-                if failed_cids:
-                    lines.append(f"  └ failed: {', '.join(failed_cids)}")
+            # Evidence failures - use 'red' list from evidence_results (Phase 3)
+            failed_cids = set()
+            for e in r.get("evidence_results", []):
+                red = e.get("red", [])
+                if isinstance(red, list):
+                    failed_cids.update(str(cid) for cid in red)
+            if failed_cids:
+                lines.append(f"  └ failed: {', '.join(sorted(failed_cids))}")
+
+            # Judge verdicts per criterion (from progress.jsonl)
+            jv = r.get("judge_verdicts")
+            if jv:
+                for v in jv:
+                    cid = v.get("criterion", "?")
+                    ja = v.get("judge_a")
+                    jb = v.get("judge_b")
+                    ja_icon = "✓" if ja else "✗"
+                    jb_icon = "✓" if jb else "✗"
+                    trusted = ja and jb
+                    if not trusted:
+                        reason_a = (v.get("judge_a_reason") or "")[:60]
+                        reason_b = (v.get("judge_b_reason") or "")[:60]
+                        lines.append(
+                            f"  └ {cid}: judge_a {ja_icon} ({reason_a}), judge_b {jb_icon} ({reason_b})"
+                        )
 
             # Overfit suspects
             if r.get("overfit_suspects"):

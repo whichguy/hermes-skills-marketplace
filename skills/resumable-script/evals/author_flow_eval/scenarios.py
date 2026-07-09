@@ -166,6 +166,7 @@ L5 = [
         "expect": "completed",
         "runs": 2,
         "input2": lambda state1: json.dumps({"item": "NEW-22904", "previous": state1}),
+        "input2_shape": {"item": "<string>", "previous": {"input": {"item": "<string>"}}},
         # graded against run 2: the current canary AND the run-1 canary (reachable only through the
         # previous run's embedded final state) must both surface in a rendered question
         "evidence": lambda ev: prompts_contain(ev, "NEW-22904", "PRIOR-88113"),
@@ -187,6 +188,8 @@ L6 = [
         "expect": "completed",
         "evidence": lambda ev: prompts_contain(ev, "ACME-9931")
                                and state_has_leaf(ev, ["low", "medium", "high"]),
+        "requires_kinds": ["agent"],
+        "needs_state_mcp": True,
         "attempts": 3,
     },
 ]

@@ -53,7 +53,10 @@ def ensure_state_mcp(container):
     home = os.environ.get("HOME", os.path.expanduser("~"))
     host_dir = os.path.join(home, ".hermes", "workflow")
     os.makedirs(host_dir, exist_ok=True)
-    shutil.copyfile(os.path.join(SCRIPTS, "state_mcp.py"), os.path.join(host_dir, "state_mcp.py"))
+    src = os.path.join(SCRIPTS, "state_mcp.py")
+    if not os.path.exists(src):
+        return "state MCP source is absent from this skill checkout: %s" % src
+    shutil.copyfile(src, os.path.join(host_dir, "state_mcp.py"))
     try:
         if _state_registered(container):
             return None

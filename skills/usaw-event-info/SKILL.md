@@ -39,194 +39,39 @@ USA Weightlifting operates two primary web platforms:
 
 All **registration** links from usaweightlifting.org event pages deep-link into Sport80. Athletes must have an active Sport80 account + USAW membership to register.
 
+> **Full reference:** See wiki page `usaw-event-info-sources` for the complete URL catalog, and `usaw-event-info-schema` for the persistent schema (lifecycle, age groups, scoring, bodyweight categories, synonyms).
+
 ## Information Type → Where to Find It
 
-This is the core lookup table. Each info type maps to a URL pattern and the data you'll find there.
+The skill classifies links into **23 info types**. The full mapping of info types to URL patterns is in `INFO_TYPES` in `usaw_event_extractor.py` and on the wiki page `usaw-event-info-sources`. Key categories:
 
-### 1. National Events — Landing Page
+| Category | Info Types | Where |
+|----------|-----------|-------|
+| **Registration** | `registration`, `adaptive_registration`, `wso_registration`, `team_registration` | Sport80 deep-links per division |
+| **Reference** | `qualifying_totals`, `event_policy`, `edit_entry`, `event_guide`, `adaptive_athlete_info`, `become_member`, `schedule_announcement` | Policy pages, QT pages, how-to guides |
+| **Schedule** | `preliminary_schedule`, `final_schedule`, `start_list`, `full_results`, `medal_schedule` | Contentstack PDFs, Google Drive folders |
+| **Spectator** | `tickets`, `live_stream`, `photo_packages` | `/tickets`, `/live`, `lifting.life/preorder` |
+| **Travel** | `hotel`, `training_sites`, `helpful_links` | Hotel booking links, local training sites |
+| **Media** | `media_credentials` | Google Forms application, NCSI background check |
 
-**URL:** `https://www.usaweightlifting.org/national-events`
+**Sport80 URL patterns:** `/v/808740/e/meets/{ID}/overview` (NCW, VWS2, Finals), `/public/wizard/e/{ID}` (VWS1, Masters/Uni, WZA), `/public/events/{ID}/entries/{ID}` (entry lists). See wiki `usaw-event-info-sources` for the full pattern catalog.
 
-Lists all upcoming national events with dates, venue, location, and links to each event's dedicated page. This is the **starting point** for any national event query.
-
-Each event has a **dedicated event page** following the URL pattern:
-```
-https://www.usaweightlifting.org/{YEAR}-{event-slug}
-```
-
-Confirmed 2026 event page URLs:
-
-| Event | URL |
-|-------|-----|
-| 2026 National Championships (NCW) | `/2026-national-championships` |
-| 2026 VIRUS Weightlifting Series 1 | `/2026-virus-weightlifting-series-1` |
-| 2026 Masters Nationals & University Nationals | `/2026-masters-national-championships-national-university-championships` |
-| 2026 VIRUS Weightlifting Series 2 | `/2026-virus-weightlifting-series-2-championships` |
-| 2026 USAW x Gymreapers Wodapalooza SoCal | `/2026-usaw-x-gymreapers-wodapalooza-socal` |
-| 2026 VIRUS Weightlifting Finals | `/2026-virus-weightlifting-finals` |
-
-**URL pattern recognition:** For future years, replace `2026` with `{YEAR}`. The event slug stays mostly stable year-to-year but check `/national-events` for the current year's links.
-
-### 2. Registration (Sport80)
-
-Each national event page contains registration links organized by championship division. Registration is on **Sport80** and follows this URL pattern:
-```
-https://usaweightlifting.sport80.com/v/808740/e/meets/{MEET_ID}/overview
-```
-
-Where `{MEET_ID}` is a numeric ID unique to each championship division (e.g. National Championships, U25, Junior, Youth, Adaptive divisions each have their own meet ID).
-
-Registration categories per national event typically include:
-- Senior National Championships (+ Adaptive)
-- U25 National Championships (+ Adaptive)
-- Junior National Championships (+ Adaptive)
-- Youth National Championships (+ Adaptive)
-- **WSO Championships** (e.g. "Mountain North WSO Championships" at NCW)
-- Some events also include University or Masters divisions
-
-**Registration tiers** (same across most national events):
-| Tier | Fee | Closes |
-|------|-----|-------|
-| Early Bird | $145 | ~6 weeks before event |
-| Regular | $175 | ~4 weeks before event |
-| Late | $375 | ~2 weeks before event |
-
-(VWS1 has a different fee structure — $199 flat.)
-
-**Registration opens:** Varies by event — most events open **January 1 of the event year, 2:00 p.m. MT**. VWS1 is an exception: it opens **November 1 of the prior year, 12:01 a.m. MT** (with a flat $199 fee). Always check the specific event page for exact opening time.
-
-### 3. Qualifying Totals
-
-**URL:** `https://www.usaweightlifting.org/{YEAR}-usa-weightlifting-national-event-qualifying-totals`
-
-Example: `/2026-usa-weightlifting-national-event-qualifying-totals`
-
-Lists the minimum totals required to qualify for each national event, broken down by:
-- Age group (Youth, Junior, U25, Senior, Masters)
-- Gender
-- Bodyweight category
-
-**Key rule:** An athlete can hit a qualifying total in one bodyweight category and register in a different category for the competition. The qualifying total is tied to the athlete's performance, not the category they register in.
-
-**New bodyweight categories** (effective Aug 1, 2026): USAW adopted IWF's new bodyweight categories. Post-Aug-1 qualifying totals apply to VWS2 and VIRUS Finals 2026.
-
-**Adaptive athletes:** Minimum qualification total = 50% of the national qualifying standard. See [Adaptive Athlete Competition Requirements](https://www.usaweightlifting.org/resources/qualifying-totals/adaptive-athlete-competition-requirements).
-
-### 4. Schedules, Start Lists, and Results
-
-Each national event page publishes these documents, typically as PDFs hosted on Contentstack CDN:
-
-| Document | What it contains | When published |
-|----------|-------------------|----------------|
-| **Preliminary Schedule** | Session order, platforms, weight categories | ~4 weeks before event |
-| **Final Schedule** | Final session times, platforms, groups (A/B) | ~10 days before event |
-| **Start List** | All registered athletes by session/platform | Same time as Final Schedule |
-| **Full Results** | Session-by-session results | Updated live during event (Google Drive folder) |
-
-**Schedule milestone timeline** (typical for a June national event):
-1. Preliminary Schedule Released — ~4 weeks before
-2. Verification of Final Entries (VFE) — ~2 weeks before (10:00–10:30 a.m. MT)
-3. Final Schedule Released — ~7–10 days before
-4. Start List published — same time as Final Schedule
-5. Full Results — Google Drive folder, updated after each "A" session
-
-**Results location:** Usually a Google Drive folder linked on the event page.
-
-### 5. Event Policies & Rules
-
-**URL:** `https://www.usaweightlifting.org/about-us/governance-and-financial/bylaws-technical-rules-and-policies/rules`
-
-Contains:
-- Competition Rules & USAW Rules Addendum
-- National Events Policies
-- Event edit/withdrawal policies
-- Technical rules (IWF alignment)
-
-### 6. Live Stream
-
-**URL:** `https://www.usaweightlifting.org/live`
-
-National events are typically live-streamed. The live page activates during event days.
-
-### 7. Tickets
-
-**URL:** `https://www.usaweightlifting.org/tickets`
-
-Spectator tickets for national events. Usually available for purchase before the event.
-
-### 8. Hotels / Accommodations
-
-Each national event page includes hotel booking links with **group codes** for discounted rates. Hotels are typically near the venue with group rates available for the event window (sometimes extended a few days before/after).
-
-Example (2026 NCW):
-- Hilton Garden Inn COS Downtown (group code USAW26)
-- Element (Marriott group link)
-- SpringHill Suites (Marriott group link)
-- Hyatt Regency (sometimes listed)
-
-### 9. Local Meets / Event Calendar
-
-**URL:** `https://usaweightlifting.sport80.com/public/widget/1`
-
-The Sport80 event calendar widget lists **both local and national events**. This is the comprehensive calendar for finding any sanctioned USAW competition.
-
-Also accessible from: `https://www.usaweightlifting.org/events` → "Find an Event"
-
-### 10. WSO (Weightlifting State Organization) Championships
-
-**URL:** `https://docs.google.com/spreadsheets/d/1FEmvRRzohx8aUvuHoNJ7yhPAIaeEQK_J/edit?gid=395204416#gid=395204416`
-
-Google Sheet listing WSO championship events. Also linked from `/events`.
-
-Some WSO championships run concurrently with national events (e.g. "Mountain North WSO Championships" at NCW, "Texas-Oklahoma WSO Championships" at VWS2).
-
-### 11. National Team / International Events
-
-**URL:** `https://www.usaweightlifting.org/resources/athlete-information-and-programs/international-squad-standings`
-
-International competition schedule and USAW national team rankings.
-
-### 12. Coaching Courses
-
-**URL:** `https://usaweightlifting.sport80.com/public/widget/2`
-
-Listed on the Event Calendars page (`/events`).
-
-### 13. Event Photos
-
-**URL:** `https://www.lifting.life/preorder` (for national events)
-
-Photo packages are typically available for preorder before the event.
-
-### 14. Media Credentials
-
-Each national event page includes a media section with requirements:
-1. Current U.S. Center for SafeSport training
-2. Valid background check on file (effective March 2026)
-3. Background checks take ~5 days — apply early
-
-### 15. Annual Schedule Announcement
-
-**URL pattern:** `https://www.usaweightlifting.org/news/{YEAR}/{month}/01/{YEAR}-usa-weightlifting-national-event-schedule`
-
-USAW announces the full year's national event schedule each August for the following year. This news article lists all dates, venues, locations, and key changes.
-
-## National Event Lifecycle (how info is released)
-
-Understanding this timeline helps know what info is available when:
+## National Event Lifecycle
 
 ```
 August (prior year)    → Schedule announced (news article)
-January (event year)  → Registration opens (time varies by event — most at 2:00 p.m. MT; VWS1 at 12:01 a.m. MT)
-~6 weeks before       → Early Bird registration closes
-~4 weeks before       → Regular registration closes / Preliminary schedule
-~2 weeks before       → Late registration closes / VFE
+January (event year)  → Registration opens (2:00 p.m. MT; VWS1 at 12:01 a.m. MT)
+~6 weeks before       → Early Bird closes
+~4 weeks before       → Regular closes / Preliminary schedule
+~2 weeks before       → Late closes / VFE (10:00-10:30 a.m. MT)
 ~10 days before       → Final schedule + Start list
-During event          → Live stream + Results (Google Drive)
+During event          → Live stream + Results (Google Drive, after "A" sessions)
 After event           → Full results archived
 ```
 
-## 2026 National Events Calendar (confirmed)
+> **Full lifecycle reference:** See wiki page `usaw-event-info-schema` for registration tiers, VFE details, schedule release phases, scoring systems, and bodyweight category changes (pre/post Aug 1, 2026).
+
+## 2026 National Events Calendar
 
 | Event | Dates | Venue | Location |
 |-------|-------|-------|----------|
@@ -236,6 +81,8 @@ After event           → Full results archived
 | VIRUS Weightlifting Series 2 | Sep 10–13 | Fort Worth Convention Center | Fort Worth, TX |
 | USAW x Gymreapers Wodapalooza SoCal | Sep 25–27 | — | Huntington Beach, CA |
 | VIRUS Weightlifting Finals | Dec 3–6 | Alameda County Fairgrounds | Pleasanton, CA |
+
+> **Live-extracted calendar with info-type coverage per event:** See wiki page `usaw-competitions-events`.
 
 ## How to Look Up Event Info (procedure)
 
@@ -250,54 +97,17 @@ After event           → Full results archived
 
 ## Wiki cross-references
 
-- [[usaw-event-info-sources]] — wiki page with full URL catalog and info-type mapping (companion to this skill)
-- [[usaw-weightlifting]] — USAW governing body entity page
-- [[usaw-competitions-events]] — competition calendar and event participation data
-- [[ncw-2026-to-logistics]] — NCW 2026 TO logistics (event-specific)
+- `usaw-event-info-sources` — wiki page with full URL catalog and info-type mapping (companion to this skill)
+- `usaw-event-info-schema` — persistent schema (lifecycle, age groups, scoring, bodyweight categories, synonyms)
+- `usaw-weightlifting` — USAW governing body entity page
+- `usaw-competitions-events` — competition calendar and event participation data
+- `ncw-2026-to-logistics` — NCW 2026 TO logistics (event-specific)
 
 ## Google Drive Results Folders
 
 Each national event publishes results to a Google Drive folder (linked from the event page as "Full Results"). The `/results` archive page lists all historical folders (2012–present).
 
-### Folder naming convention
-```
-{YEAR} - {EVENT_ABBR} - Results
-```
-Examples: `2026 - NCW - Results`, `2026 - VWS1 - Results`, `2026 - Masters & Uni - Results`
-
-### File types inside results folders
-
-| Doc Type | File Pattern | Description |
-|----------|-------------|-------------|
-| **Full Results** | `Results.pdf` | All sessions, all athletes, all attempts (owlcms-generated) |
-| **Best Lifters** | `Results - {DIV} Best Lifters.pdf` | Top 10 per weight class by Sinclair/QPoints |
-| **Teams** | `Results - {DIV} Teams.pdf` | Team standings by division |
-| **Medal Schedule** | `Medal Schedule.pdf` | Ceremony times by category |
-| **Registered Teams** | `Registered Teams.pdf` | Pre-event team list (NUC only) |
-| **Glen Middleton Award** | `Glen Middleton Award.pdf` | Team award (NCW only) |
-
-### Full Results PDF data structure (owlcms)
-
-Each page = one Age Group + Gender + Weight Category. Columns:
-```
-T (sn/cj/total rank) | sn 1st 2nd 3rd | cj 1st 2nd 3rd | Lot | Name | Team | Wt. | Age | Total | Score
-```
-- Attempts in kg, bodyweight to 2 decimal places
-- DNF entries show `DNF` in Total/Score
-- Score = Sinclair (senior) or QPoints/QYouth (youth/junior)
-
-### Division codes in filenames
-
-U11, U13, U15, U17, U23, U25, JR, Open, Masters, Military, Military Masters, University, ADAP (Adaptive)
-
-### Historical results archive
-
-`usaweightlifting.org/results` — Google Drive links for all events 2012–present.
-- 2018+: Google Drive folders
-- Pre-2018: AWS S3 direct PDF/Excel links
-- Sponsor naming: "American Open" → "North American Open" (~2021) → "VIRUS Weightlifting Series" (~2024)
-
-`usaweightlifting.org/prior-year-event-schedules` — Prelim/Final schedule PDFs from 2021–2025 on Contentstack CDN (stable URLs).
+> **Full reference:** See wiki page `usaw-event-info-sources` for confirmed Drive folder IDs (2025-2026), file naming conventions, document type classification, division codes, and the owlcms PDF data structure.
 
 ## Auto-Extraction Script
 
@@ -327,7 +137,7 @@ uv run --with beautifulsoup4 --with requests --with rapidfuzz \
 - Inline metadata: registration fees ($145/$175/$375 tiers), schedule milestones, deadlines
 - Sport80 URL classification: `/v/meets/{ID}`, `/public/wizard/e/{ID}`, `/public/events/{ID}/entries/{ID}`
 
-**Info type taxonomy (22 types):**
+**Info type taxonomy (23 types):**
 
 | Category | Info Types |
 |----------|-----------|
@@ -401,9 +211,49 @@ uv run --with beautifulsoup4 --with requests --with rapidfuzz \
   python scripts/test_extractor_mock.py --refresh
 ```
 
+### Unit tests (offline, <1 second)
+
+`scripts/test_extractor_units.py` — 22 tests for individual functions: URL
+classification, Sport80 URL parsing, nav link filtering, info type matching,
+header priority disambiguation, and edge cases.
+
+`scripts/test_results_parser.py` — 11 tests for PDF parsing: full results,
+best lifters, start list, final schedule (3 formats), DNF layouts (3),
+classify_file_name, format_summary, and edge cases.
+
+`scripts/test_page_health.py` — 5 tests for page-health monitoring: section
+extraction, link count thresholds, classified link presence, and per-event
+health warnings.
+
+`scripts/test_coverage_expansion.py` — 83 tests for previously untested
+functions: `_resolve_url`, `_clean_link_text`, `extract_event_title_and_overview`,
+`extract_event_page`, `format_markdown`, `simplify_event`, `diff_events`,
+`load_snapshot`/`save_snapshot`, `classify_file_name`, `format_summary`,
+`_find_section_containers` (4 tests), `_extract_links_from_element` (4 tests),
+`extract_all_links` (3 tests), `update_meet_ids_reference` (5 tests),
+`run_test_suite` (1 test), `classify_info_type` (3), `classify_sport80_url` (2),
+`extract_inline_metadata` (3), `_is_nav_link` (4), `check_page_health` (3),
+`parse_athlete_lines` (3), and `classify_file_name` (3).
+
+### Full test suite (all 134 tests)
+
+```bash
+uv run --with pytest --with beautifulsoup4 --with rapidfuzz --with pymupdf \
+  python3 -m pytest test_extractor_units.py test_extractor_mock.py \
+  test_results_parser.py test_page_health.py test_coverage_expansion.py -q
+```
+
 Tests validate: required info types per event, zero unclassified, title/dates/venue
 extraction, Sport80 URL patterns, Google Drive results links, TBA/TBD status,
-fee/milestone metadata, and edge cases (WZA minimal, Masters/Uni combined, prior-year slugs).
+fee/milestone metadata, edge cases (WZA minimal, Masters/Uni combined, prior-year slugs),
+DNF parsing (3 layouts), final schedule parsing (3 formats), page health monitoring,
+and all previously untested utility functions.
+
+**Coverage gaps:** See `references/usaw-test-coverage-gap-analysis.md` for the
+exhaustive mapping of every untested branch, edge case, and boundary condition
+across all three source files. Key gaps: `main()` CLI paths, Google Drive
+download functions, network error paths, `_find_section_containers()` edge cases,
+`format_markdown()` rendering, and the full daily-sync orchestration loop.
 
 ## Results PDF Parser Script
 
@@ -426,19 +276,23 @@ uv run --with pymupdf --with google-api-python-client --with google-auth-oauthli
   python scripts/usaw_results_parser.py --folder-id 14ncrwEnqErUKGomckAdG_LOT0qEbRomI --all --json
 ```
 
-**Three PDF types parsed:**
+**Four PDF types parsed:**
 - **Full Results** (`Results.pdf`): owlcms export — all athletes, all attempts, all categories. Extracts: lot, name, team, bodyweight, age, snatch attempts (3), CJ attempts (3), total, score, age_group, gender, weight_category.
 - **Best Lifters** (`{DIV} Best Lifters.pdf`): ranked list by Sinclair/QPoints. Extracts: division, gender, name, team, bodyweight, age, snatch, CJ, total, score.
 - **Start List** (`start-list.pdf`): pre-event registration. Extracts: lot, name, team, entry_total, age.
+- **Final Schedule** (`Final Schedule.pdf`): session grid with platform, weigh-in time, start time, gender, age group, weight category, qualifying totals, entry count. Three distinct session formats: (a) **Full** — all 8 fields present (31 sessions), (b) **Condensed** — platform + times + gender + age_group only, no weight category or entry count (63 youth sessions), (c) **WSO/ADAP** — age_group + weight_cat + qualifying_totals + entry_count, no platform or times (28 adaptive/masters sessions). Total: 122 sessions from NCW 2026. See `references/usaw-final-schedule-parsing.md` for the complete format reference.
 
 **Test results** (2026 NCW PDFs):
-- Full Results: 788 athletes, 88 categories, 755 complete records with full attempt data
+- Full Results: 1,341 athletes, 45 DNF, 0 false parses
 - Best Lifters: 20 athletes (U11 division), all with snatch/CJ/total/score
-- Start List: parsing functional (tested separately)
+- Start List: 1,456 athletes
+- Final Schedule: 122 sessions (31 full, 63 condensed, 28 WSO/ADAP)
 
 **Reference files:**
 - `references/usaw-sport80-meet-ids.md` — all confirmed 2026 Sport80 meet IDs (25 divisions across 6 events)
 - `references/usaw-results-folder-ids.md` — all confirmed Google Drive folder IDs (2024–2026)
+- `references/usaw-owlcms-dnf-parsing.md` — complete DNF pattern reference (3 layouts, 0 false parses)
+- `references/usaw-final-schedule-parsing.md` — final schedule 3-format reference (full, condensed, WSO/ADAP)
 
 ## Daily Sync Cron
 
@@ -462,6 +316,7 @@ script-only cron (`no_agent: true`) and stays silent when no changes are found.
 - New/removed info types
 - New URLs added to the event page
 - Test suite pass/fail status
+- **Page health** (advisory, non-blocking): sections extracted, link count (≥5), classified links present. Warnings surface in the sync report as `health_warnings` per event. Detects CMS changes, broken pages, or pages that changed structure enough to break the extractor. See `scripts/test_page_health.py` for the 5 health-check tests.
 
 ## USAW Event Information Schema
 
@@ -503,6 +358,26 @@ The schema page documents:
 
 12. **Prior-year pages use different URL slugs.** The `{YEAR}-{event-slug}` pattern is NOT stable across years. 2025 NCW is `/2025-usaw-national-championships` (with "usaw" prefix), while 2026 is `/2026-national-championships` (without). VWS1 was `/2025-north-american-open-series-1` in 2025 but `/2026-virus-weightlifting-series-1` in 2026. Always verify event URLs via `/national-events` rather than guessing the slug.
 
+13. **Tests must match current function signatures (2026-07-07).** When you refactor function signatures — add/remove/rename parameters, change return types — the unit tests in `test_extractor_units.py` will break because they call functions directly. In one session, 11 of 22 tests failed after `_is_nav_link()` gained `link_text` and `h3_header` parameters, `classify_info_type()` changed its signature, and `classify_sport80_url()` changed its return type. **Prevention:** after any signature change, immediately run `uv run --with pytest --with beautifulsoup4 --with rapidfuzz python3 -m pytest test_extractor_units.py test_extractor_mock.py test_results_parser.py -q`. Fix all failures before committing. Also remove `return True` statements from test functions — pytest warns on non-None returns and they mask assertion failures.
+
+14. **DNF parsing in owlcms PDFs has three distinct layouts (2026-07-08, resolved).** The string "DNF" appears in owlcms results PDFs in three different layouts: (a) all-DNF on one line ("DNF DNF DNF" — all attempts failed), (b) all-DNF on three lines (3 consecutive "DNF" lines — same as (a) but split), (c) partial DNF ("DNF DNF" for cj_rank+total_rank, then 1 numeric rank + lot + name — athlete had a valid snatch but DNF'd cj). The parser detects all three: 0 false parses, 1,341 athletes parsed, 45 DNF (total=0). DNF means total=0 (not "DNF" string or None). If both snatch_best and cj_best exist, total is computed from them. See `references/usaw-owlcms-dnf-parsing.md` for the complete pattern reference. Three isolated unit tests in `test_results_parser.py` cover each layout. **Also:** standalone "DNF" and "DNF DNF" lines are now checked for a lot number within 5 lines — if found, they're treated as DNF athlete starts (catches 26 additional DNF athletes that were previously skipped as noise).
+
+15. **parse_athlete_lines returns (athlete, lines_consumed) tuple (2026-07-08).** The parser now returns the number of lines consumed so callers skip exactly that far — no more fragile fixed-line skip distances. All 3 call sites in `parse_full_results` use `athlete, consumed = parse_athlete_lines(...)` and set `i = start_position + consumed`. If you add a new call site, always unpack the tuple. The old approach (fixed skip of 16/12/13) took 4 iterations to tune and was still wrong for edge cases.
+
+16. **Final Schedule PDF detection must precede full_results (2026-07-08).** The Final Schedule PDF contains "owlcms" in its header, so `detect_pdf_type` was misidentifying it as `full_results` and parsing 4 garbage athletes. The fix: check for `Session` + `Platform` + `Weigh-In` keywords BEFORE the `owlcms`/`Age Group` check. Detection order matters — always add new PDF type checks before the broad `full_results` fallback.
+
+17. **Python `for...else` trap in `_find_section_containers` (2026-07-08).** The walk-up loop used `for _ in range(5): ... else: containers.append(...)`. When `container` became `None` (walked past root), the loop hit `break` — but `break` prevents the `else` clause from running. Result: H2 sections with no `<ul>` ancestor were silently dropped instead of falling back to strategy 2. Fixed with an explicit `found_ul` flag. **Rule:** never use `for...else` when the loop body contains a `break` that isn't the success path — use a flag variable instead.
+
+18. **Nav link filter trailing-slash mismatch (2026-07-08).** `_is_nav_link` used `/coaching/` (with trailing slash) but the actual URL was `/coaching` (no slash). The regex didn't match, so coaching links leaked through as classified content. **Rule:** when adding nav patterns, test both `/path` and `/path/` variants — or use patterns without trailing slashes to match both.
+
+19. **`check_page_health` crashes on `sections=None` (2026-07-08).** When `event_data.get("sections")` returns `None`, the `sum(len(s.get("links", [])) for s in sections)` call fails with `TypeError: 'NoneType' object is not iterable`. Fixed with `sections = event_data.get("sections") or []`. **Rule:** always guard against `None` when iterating over dict values that may be absent — use `or []` / `or {}` fallbacks.
+
+20. **Subagent-introduced typos can break production code (2026-07-08).** A Kimi subagent introduced `iflot_idx is not None:` (missing space) into `usaw_results_parser.py`, which silently broke the DNF handler. The parser still ran but missed 26 DNF athletes. **Rule:** after any subagent modifies source code, always run the full test suite AND verify the 4 fixture PDFs before committing. Subagents don't have the full context and can introduce subtle syntax errors.
+
+21. **`FILE_NAME_PATTERNS` ordering: specific patterns must precede generic (2026-07-08).** `full_results` matches `Results.pdf$` — this catches `Glen Middleton Award Results.pdf` before the `glen_middleton` pattern gets a chance. Similarly, `2026 NCW Results - Open Teams.pdf` should match `teams` but `full_results` wins because it's first in the dict. **Rule:** when adding new file-name patterns, put specific patterns (glen_middleton, teams, best_lifters) BEFORE the generic `full_results` pattern. Or make `full_results` more specific (e.g. `Results\\.pdf$` → require no "Glen Middleton" or "Teams" or "Best" in the filename).
+
+22. **Tests must use `FIXTURE_DIR` for PDF paths, not relative paths (2026-07-09).** `test_final_schedule_3_formats` used `parse_pdf("../tests/fixtures/pdfs/2026-ncw-final-schedule.pdf")` — a relative path that only works when the CWD is `scripts/`. When run from the skill root or via `pytest` with a different CWD, the path resolves wrong and the test fails. **Fix:** use `parse_pdf(str(FIXTURE_DIR / "2026-ncw-final-schedule.pdf"))` — `FIXTURE_DIR` is defined at the top of the test file as `Path(__file__).parent.parent / "tests" / "fixtures" / "pdfs"` and works regardless of CWD. All other tests already use this pattern; this was the only straggler.
+
 ## Verification Checklist
 
 - [ ] Correct event year and slug identified
@@ -512,4 +387,6 @@ The schema page documents:
 - [ ] Schedule milestone timeline checked (what's been published vs what's pending)
 - [ ] Wiki searched for existing Jim-specific knowledge about the event
 - [ ] All URLs verified as live (not 404) before presenting to user
-- [ ] If extractor was modified: run `scripts/test_extractor.py -v` — all 11 tests must pass
+- [ ] If extractor was modified: run `uv run --with pytest --with beautifulsoup4 --with rapidfuzz --with pymupdf python3 -m pytest test_extractor_units.py test_extractor_mock.py test_results_parser.py test_page_health.py test_coverage_expansion.py -q` — all 134 tests must pass
+- [ ] If results parser was modified: run `parse_pdf()` against ALL 4 fixture PDFs (`2026-ncw-results.pdf`, `2026-ncw-start-list.pdf`, `2026-ncw-u11-best-lifters.pdf`, `2026-ncw-final-schedule.pdf`) — not just the one being modified. Expected: full_results=1,341 athletes/0 false parses, start_list=1,456 athletes, best_lifters=20 lifters, final_schedule=122 sessions (31 full, 63 condensed, 28 WSO/ADAP).
+- [ ] If PDF type detection was modified: verify all 4 types are correctly detected (full_results, start_list, best_lifters, final_schedule) — the owlcms header appears in ALL types, so specific checks must come before the generic owlcms/Age Group fallback.

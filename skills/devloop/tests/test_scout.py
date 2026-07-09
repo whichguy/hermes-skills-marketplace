@@ -431,7 +431,7 @@ def test_bridge_run_exposes_retryable_and_charter(tmp_path):
     """The real bridge must FORWARD retryable + charter into devloop_result — the adapter's
     escalate-vs-reattempt fidelity depends on it."""
     import devloop_bridge as br
-    fake_rt = lambda repo, request, root, name: {
+    fake_rt = lambda repo, request, root, name, **kw: {
         "result": {"terminal": "HUMAN_REVIEW", "reason": "r", "retryable": False},
         "worktree": {}, "charter": {"dod": [{"id": "c1"}], "open_questions": []}}
     out = br._run("req", "n-scout-test", run_task=fake_rt, repo=str(tmp_path))
@@ -450,7 +450,7 @@ def test_bridge_finalize_commit_failure_degrades_scout_result(monkeypatch, tmp_p
     os.chmod(hook, 0o755)
     made = {}
 
-    def complete_with_work(repo_, request, root, name):
+    def complete_with_work(repo_, request, root, name, **kw):
         wt = worktree.create_worktree(repo_, name, root)
         open(os.path.join(wt["path"], "built.py"), "w").write("built = True\n")
         made.update(wt)
@@ -484,7 +484,7 @@ def test_bridge_keep_branch_does_not_bless_failed_finalize_commit(tmp_path):
     open(hook, "w").write("#!/bin/sh\nexit 1\n")
     os.chmod(hook, 0o755)
 
-    def complete_with_work(repo_, request, root, name):
+    def complete_with_work(repo_, request, root, name, **kw):
         wt = worktree.create_worktree(repo_, name, root)
         open(os.path.join(wt["path"], "built.py"), "w").write("built = True\n")
         return {"result": {"terminal": "COMPLETE", "reason": "done"},
@@ -508,7 +508,7 @@ def test_bridge_surfaces_leaked_branch_after_successful_merge(monkeypatch, tmp_p
             return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
         return orig_git(repo_arg, *args, **kw)
 
-    def complete_with_work(repo_, request, root, name):
+    def complete_with_work(repo_, request, root, name, **kw):
         wt = worktree.create_worktree(repo_, name, root)
         open(os.path.join(wt["path"], "built.py"), "w").write("built = True\n")
         return {"result": {"terminal": "COMPLETE", "reason": "done"},
@@ -531,7 +531,7 @@ def test_bridge_boundary_guard_restores_agent_debris(tmp_path):
     with open(pre_existing, "w") as f:
         f.write("keep me\n")
 
-    def escaping_rt(repo_, request, root, name):
+    def escaping_rt(repo_, request, root, name, **kw):
         os.remove(os.path.join(repo_, "seed.py"))              # deletes a tracked file
         with open(os.path.join(repo_, "debris.tmp"), "w") as f:
             f.write("junk\n")
@@ -606,7 +606,7 @@ def test_bridge_run_surfaces_failed_boundary_restore(monkeypatch, tmp_path):
     import devloop_bridge as br
     repo = _git_repo(tmp_path)
 
-    def escaping_rt(repo_, request, root, name):
+    def escaping_rt(repo_, request, root, name, **kw):
         with open(os.path.join(repo_, "stuck.txt"), "w") as f:
             f.write("junk\n")
         return {"result": {"terminal": "HUMAN_REVIEW", "reason": "r"}, "worktree": {},
@@ -622,7 +622,7 @@ def test_bridge_run_surfaces_failed_boundary_restore(monkeypatch, tmp_path):
 def test_bridge_boundary_guard_noop_on_clean_run(tmp_path):
     import devloop_bridge as br
     repo = _git_repo(tmp_path)
-    rt = lambda repo_, request, root, name: {
+    rt = lambda repo_, request, root, name, **kw: {
         "result": {"terminal": "HUMAN_REVIEW", "reason": "r"}, "worktree": {}, "charter": {}}
     out = br._run("req", "n-clean-test", run_task=rt, repo=repo)
     assert out["devloop_result"]["boundary_restored"] == []

@@ -28,7 +28,6 @@ for _p in (SCRIPTS, HERE):
         sys.path.insert(0, _p)
 
 from oneshot import run_docker_exec                          # noqa: E402
-from workflow import _convo_to_text  # noqa: E402
 
 HOST_HERMES = os.path.join(os.environ.get("HOME", os.path.expanduser("~")), ".hermes")
 HOST_EVAL_ROOT = os.path.join(HOST_HERMES, "workflow", "eval")          # -> /opt/data/workflow/eval
@@ -38,6 +37,11 @@ HOST_SENTINEL = os.path.join(HOST_HERMES, ".hermes", "workflow", "active")
 
 CONTAINER = os.environ.get("RESUMABLE_EVAL_CONTAINER", "hermes")
 DEFAULT_TIMEOUT = int(os.environ.get("RESUMABLE_EVAL_AGENT_TIMEOUT", "300"))
+
+
+def _convo_to_text(convo):
+    """Flatten chat messages into the stateless prompt shape expected by `hermes -z`."""
+    return "\n\n".join("%s: %s" % (m.get("role", "user"), m.get("content", "")) for m in convo)
 
 
 def _exec_with_retry(prompt, timeout, container, tries=3, **kw):

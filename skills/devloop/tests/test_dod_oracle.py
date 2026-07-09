@@ -78,6 +78,104 @@ def test_structural_coverage_skips_idless_criterion_without_crashing():
     assert ok2 is False and unc2 == ["c2"]
 
 
+def test_judge_assertions_handles_tuple_returns_with_reasons():
+    # Judges may return (vote, reason) tuples. The _unwrap helper normalizes them so the
+    # verdict carries both judges' reasons and escalates on disagreement.
+    out = dod_oracle.judge_assertions(
+        [{"test_id": "t1", "criterion_id": "c1"}],
+        {"c1": {"id": "c1", "verify_intent": "x"}},
+        lambda c, t: (False, "missing edge case"),
+        lambda c, t: (True, "covers main path"))
+    assert out[0]["judge_a"] is False
+    assert out[0]["judge_b"] is True
+    assert "missing edge case" in out[0]["judge_a_reason"]
+    assert "covers main path" in out[0]["judge_b_reason"]
+    assert out[0]["encodes"] is False     # disagreement -> not trusted
+    assert out[0]["escalate"] is True
+
+
+def test_log_judge_verdicts_writes_records_to_run_dir_and_diagnostics():
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        verdicts = [{
+            "criterion_id": "c1",
+            "test_ids": ["t1"],
+            "judge_a": True,
+            "judge_b": False,
+            "judge_a_reason": "yes",
+            "judge_b_reason": "no",
+            "encodes": False,
+            "escalate": True,
+            "tiebreaker": None,
+            "tiebreaker_reason": "",
+        }]
+        # Ensure HERMES_WRITE_SAFE_ROOT points to a temp dir so we don't append to real diagnostics
+        os.environ["HERMES_WRITE_SAFE_ROOT"] = d
+        dod_oracle._log_judge_verdicts(d, verdicts, "model-a", "model-b")
+
+        run_path = os.path.join(d, "judge_verdicts.jsonl")
+        assert os.path.exists(run_path)
+        with open(run_path) as f:
+            rec = json.loads(f.readline())
+        assert rec["criterion_id"] == "c1"
+        assert rec["judge_a"]["vote"] is True
+        assert rec["judge_b"]["vote"] is False
+        assert rec["split_vote"] is True
+        assert rec["tiebreaker"] is None
+
+        diag_path = os.path.join(d, "devloop-diagnostics", "judge_verdicts.jsonl")
+        assert os.path.exists(diag_path)
+        with open(diag_path) as f:
+            diag_rec = json.loads(f.readline())
+        assert diag_rec["criterion_id"] == "c1"
+        assert diag_rec["judge_a"]["model"] == "model-a"
+        assert diag_rec["judge_b"]["model"] == "model-b"
+
+
+def test_log_judge_verdicts_survives_unwritable_run_dir():
+    # Logging must never crash the run, even if the run directory is unwritable.
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        unwritable = os.path.join(d, "read_only_run")
+        os.makedirs(unwritable)
+        os.chmod(unwritable, 0o555)
+        os.environ["HERMES_WRITE_SAFE_ROOT"] = d
+        try:
+            # The first open() for run_dir/judge_verdicts.jsonl should fail with OSError
+            dod_oracle._log_judge_verdicts(unwritable, [], "m", "m")
+        finally:
+            os.chmod(unwritable, 0o755)
+
+
+def test_log_judge_verdicts_records_tiebreaker_when_present():
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        verdicts = [{
+            "criterion_id": "c1",
+            "test_ids": ["t1"],
+            "judge_a": True,
+            "judge_b": False,
+            "judge_a_reason": "",
+            "judge_b_reason": "",
+            "encodes": True,
+            "escalate": False,
+            "tiebreaker": True,
+            "tiebreaker_reason": "agreed with a",
+        }]
+        os.environ["HERMES_WRITE_SAFE_ROOT"] = d
+        dod_oracle._log_judge_verdicts(d, verdicts, "a", "b", "tie")
+
+        with open(os.path.join(d, "judge_verdicts.jsonl")) as f:
+            rec = json.loads(f.readline())
+        assert rec["tiebreaker"]["vote"] is True
+        assert rec["tiebreaker"]["reason"] == "agreed with a"
+        assert rec["tiebreaker"]["model"] == "tie"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

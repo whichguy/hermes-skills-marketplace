@@ -42,7 +42,32 @@ def run_extractor(url: str) -> dict:
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     if result.returncode != 0:
         raise RuntimeError(f"Extractor failed for {url}: {result.stderr}")
-    return json.loads(result.stdout)
+    data = json.loads(result.stdout)
+    # Page-health check: verify the extracted page has expected content
+    health = check_page_health(data, url)
+    if not health["healthy"]:
+        data["_health_warnings"] = health["issues"]
+    return data
+
+
+def check_page_health(event_data: dict, url: str) -> dict:
+    """Check if an extracted event page has expected content.
+
+    Returns {'healthy': bool, 'issues': [str]}.
+    Advisory only — does not block sync, but issues are surfaced in the report.
+    """
+    issues = []
+    sections = event_data.get("sections") or []
+    if not sections:
+        issues.append("zero sections extracted")
+    total_links = sum(len(s.get("links", [])) for s in sections)
+    if total_links < 5:
+        issues.append(f"low link count ({total_links})")
+    # Check for at least one classified info type
+    classified = [s for s in sections for link in s.get("links", []) if link.get("info_type")]
+    if not classified:
+        issues.append("zero classified links")
+    return {"healthy": len(issues) == 0, "issues": issues}
 
 
 def load_snapshot() -> dict:
@@ -77,7 +102,7 @@ def simplify_event(event: dict) -> dict:
         "status": event.get("status"),
         "fees": event.get("fees"),
         "milestones": event.get("milestones"),
-        "info_type_count": len(set(l[0] for l in links if l[0])),
+        "info_type_count": len(set(link[0] for link in links if link[0])),
         "links": links,
     }
 
@@ -96,8 +121,8 @@ def diff_events(old: dict | None, new: dict, name: str) -> list:
                 "new": new_simple.get(key),
             })
 
-    old_types = {l[0] for l in old_simple.get("links", []) if l[0]}
-    new_types = {l[0] for l in new_simple.get("links", []) if l[0]}
+    old_types = {link[0] for link in old_simple.get("links", []) if link[0]}
+    new_types = {link[0] for link in new_simple.get("links", []) if link[0]}
     added_types = new_types - old_types
     removed_types = old_types - new_types
     if added_types:
@@ -105,8 +130,8 @@ def diff_events(old: dict | None, new: dict, name: str) -> list:
     if removed_types:
         changes.append({"event": name, "field": "info_types", "removed": sorted(removed_types)})
 
-    old_urls = {l[2] for l in old_simple.get("links", []) if l[2]}
-    new_urls = {l[2] for l in new_simple.get("links", []) if l[2]}
+    old_urls = {link[2] for link in old_simple.get("links", []) if link[2]}
+    new_urls = {link[2] for link in new_simple.get("links", []) if link[2]}
     added_urls = new_urls - old_urls
     if added_urls:
         changes.append({"event": name, "field": "urls", "added": sorted(added_urls)[:20]})
@@ -203,10 +228,19 @@ def main():
     # L5: Check for Sport80 meet ID drift
     meet_id_drift = update_meet_ids_reference(new_snapshot)
 
+    # Collect health warnings from all events
+    health_warnings = {}
+    for name, data in new_snapshot.items():
+        if isinstance(data, dict) and data.get("_health_warnings"):
+            health_warnings[name] = data["_health_warnings"]
+            del data["_health_warnings"]  # Don't persist in snapshot
+
     report = {
         "run_at": datetime.now(timezone.utc).isoformat(),
         "events_checked": len(EVENTS_2026),
         "events_with_errors": len(errors),
+        "events_with_health_warnings": len(health_warnings),
+        "health_warnings": health_warnings,
         "errors": errors,
         "changes": all_changes,
         "meet_id_drift": meet_id_drift,
@@ -222,8 +256,8 @@ def main():
     summary_lines.append(f"Events checked: {report['events_checked']}")
     if errors:
         summary_lines.append(f"Errors: {len(errors)}")
-        for e in errors:
-            summary_lines.append(f"  ❌ {e['event']}: {e['error']}")
+        for err in errors:
+            summary_lines.append(f"  ❌ {err['event']}: {err['error']}")
 
     if all_changes:
         summary_lines.append(f"Changes detected: {len(all_changes)}")

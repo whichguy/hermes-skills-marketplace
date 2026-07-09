@@ -93,6 +93,7 @@ def run_scenario(sc, env):
     attempts = sc.get("attempts", 2)
     last = None
     art_root = os.path.join(env["artifacts"], "%s_%s" % (sc["suite"], sc["id"]))
+    shutil.rmtree(art_root, ignore_errors=True)
     for i in range(attempts):
         art = os.path.join(art_root, "attempt%d" % i)
         os.makedirs(art, exist_ok=True)
@@ -123,9 +124,16 @@ def _shape(node):
 
 def _authoring_task(sc):
     shape = _shape(json.loads(sc["input"]))
-    return (sc["task"]
+    text = (sc["task"]
             + "\n\nINPUT SHAPE — the run's input object has exactly these fields (values arrive at "
-              "runtime):\n" + json.dumps(shape, indent=2, sort_keys=True))
+              "runtime). In workflow templates, these fields live under the global path `$.input`; "
+              "for example, an input field named `foo` is `${$.input.foo}`:\n"
+            + json.dumps(shape, indent=2, sort_keys=True))
+    if sc.get("input2_shape"):
+        text += ("\n\nSECOND RUN INPUT SHAPE — this same authored flow will be run again with an "
+                 "input object shaped like this. These fields also live under `$.input` in workflow "
+                 "templates:\n" + json.dumps(sc["input2_shape"], indent=2, sort_keys=True))
+    return text
 
 
 def _run_once(sc, env, art):

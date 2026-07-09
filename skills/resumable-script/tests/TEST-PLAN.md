@@ -37,6 +37,13 @@ Invocation surfaces:
   token echoed by the suite proves provenance. This closes accidental/lazy fabrication,
   hallucinated PASS, and stale-artifact reuse; a deliberately adversarial in-container agent is
   out of scope.
+- **via the authoring eval**: `evals/.venv/bin/pytest evals/author_flow_eval -m L1 -v` (or the full
+  `author_flow_eval` ladder) is the real "Hermes authors the workflow" gate. Run it from the host
+  checkout: the harness itself shells into the running `hermes` container and invokes
+  `/opt/hermes/bin/hermes -z`, so the authoring/model work happens in the container while pytest
+  remains the host-side referee. L1-L5 cover the active interpreter surface. L6 is intentionally
+  marked as requiring the currently-unsupported `agent` kind plus state MCP, so it skips with a clear
+  reason instead of failing during global setup.
 
 The suite is **receipt-based**: it drives the real `run`/`resume` CLI and asserts on exit codes and
 journal shape (e.g. `step_started` counts prove a step did / didn't re-run), never on prose.
@@ -50,6 +57,11 @@ journal shape (e.g. `step_started` counts prove a step did / didn't re-run), nev
 ## Contract checks (run first)
 - **contract** (`tests/run.py`) — sorted JSON keys; `NaN`/`Infinity`/`bigint`/`> 2^53-1`
   rejected. Pins the portable format (mirrored by `extras/js-mirror/tests/contract_check.js`).
+- **standalone edge checks** (`tests/run.py`) — promotes the older focused scripts into the
+  default offline gate: answer-schema variants (`test_answer_fuzz.py`), on-error regex matching
+  (`test_on_error_fuzz.py`), map stress/empty/error/blob cases (`test_map_fuzz.py`), and journal
+  mutation recovery/rejection (`test_mutations.py`). These scripts are path-portable and should
+  pass both from the host checkout and from `/opt/data/skills/resumable-script` in the container.
 
 ## Core ladder — mechanism (escalating)
 | Rung | Proves | Key receipt |

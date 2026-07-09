@@ -48,7 +48,14 @@ except ImportError:
 # ──────────────────────────────────────────────────────────────────────
 
 def detect_pdf_type(doc: fitz.Document) -> str:
-    """Detect the type of USAW results PDF by examining its text."""
+    """Detect the type of USAW results PDF by examining its text.
+    
+    Detection order matters: specific formats must be checked before generic
+    headers. The owlcms header appears in ALL PDF types, so 'owlcms' or
+    'Age Group' checks must come AFTER format-specific checks (Best Lifters,
+    Start List, Final Schedule, Medal Schedule). Otherwise schedule/start-list
+    PDFs get misidentified as full_results.
+    """
     first_page_text = doc[0].get_text() if len(doc) > 0 else ""
     
     # Best Lifters: typically 1 page, contains "Best Lifters" or ranked list
@@ -59,6 +66,10 @@ def detect_pdf_type(doc: fitz.Document) -> str:
     if "Start list" in first_page_text or "start-list" in first_page_text.lower():
         return "start_list"
     
+    # Final Schedule: contains session/platform/weigh-in columns
+    if "Session" in first_page_text and "Platform" in first_page_text and "Weigh-In" in first_page_text:
+        return "final_schedule"
+
     # Full Results: owlcms header, multiple pages, "Age Group" sections
     if "Age Group" in first_page_text or "owlcms" in first_page_text:
         return "full_results"
@@ -104,9 +115,9 @@ def parse_full_results(doc: fitz.Document) -> dict:
     athletes = []
     categories = []
     
-    current_age_group = None
-    current_gender = None
-    current_weight_cat = None
+    current_age_group = ""
+    current_gender = ""
+    current_weight_cat = ""
     
     for page_num, page in enumerate(doc):
         text = page.get_text()
@@ -148,7 +159,7 @@ def parse_full_results(doc: fitz.Document) -> dict:
             # Detect: 3 consecutive small integers (ranks 1-20), then a larger integer (lot 1-2000)
             if line.isdigit():
                 # Check if this looks like the start of an athlete row (3 ranks + lot)
-                vals = []
+                vals: list[int] = []
                 for j in range(i, min(i + 4, len(lines))):
                     v = lines[j].strip()
                     if v.isdigit():
@@ -160,20 +171,104 @@ def parse_full_results(doc: fitz.Document) -> dict:
                 
                 if len(vals) >= 4:
                     # Pattern: rank1 rank2 rank3 lot
+                    # Ranks are small (1-50), lot can be 1-2000. The first 3 values
+                    # must be rank-like (<=50) to distinguish from attempt values
+                    # (50-200+) that appear in athlete data after a missed skip.
                     lot = vals[3]
-                    if 1 <= lot <= 2000:
+                    ranks_are_small = all(v <= 50 for v in vals[:3])
+                    if ranks_are_small and 1 <= lot <= 2000:
                         # Move index to the lot position
-                        athlete = parse_athlete_lines(lines, i + 3, lot, 
+                        athlete, consumed = parse_athlete_lines(lines, i + 3, lot,
                                                      current_age_group, current_gender, current_weight_cat)
                         if athlete:
                             athletes.append(athlete)
-                        i += 4
+                        # Skip past ranks (3) + lot (1) + exactly the lines consumed
+                        i = i + 4 + consumed
                         continue
-                # Also handle DNF entries: "DNF DNF DNF" then lot
-                if line == "DNF" or (line.isdigit() and 1 <= int(line) <= 2000):
-                    # Might be a standalone lot (after DNF ranks on same line)
-                    # or a rank. Use the athlete_lines parser as fallback.
+
+                # DNF athlete with partial ranks: some ranks are DNF (text, skipped),
+                # leaving only 1-2 numeric rank values before the lot. Detect: 1-2 small
+                # digits followed by a larger digit (lot), followed by a name (comma or uppercase).
+                if line.isdigit() and 1 <= int(line) <= 50:
+                    # Check 1-rank pattern: rank, lot, name
+                    if (i + 2 < len(lines) and lines[i + 1].strip().isdigit()
+                            and 1 <= int(lines[i + 1].strip()) <= 2000
+                            and int(lines[i + 1].strip()) > 50):
+                        name_line = lines[i + 2].strip() if i + 3 < len(lines) else ""
+                        if "," in name_line or (name_line.isupper() and len(name_line) > 3):
+                            lot = int(lines[i + 1].strip())
+                            athlete, consumed = parse_athlete_lines(lines, i + 1, lot,
+                                                         current_age_group, current_gender, current_weight_cat)
+                            if athlete:
+                                athletes.append(athlete)
+                            # Skip past rank (1) + lot (1) + exactly the lines consumed
+                            i = i + 2 + consumed
+                            continue
+
+            # Handle DNF athletes: ALL attempts failed. In owlcms PDFs this appears as
+            # either "DNF DNF DNF" on one line, or 3 consecutive "DNF" lines (one per rank).
+            # After the DNF ranks, the next integer is the lot for the DNF athlete.
+            is_dnf_block = (line == "DNF DNF DNF" or
+                           (line == "DNF" and i + 2 < len(lines) and
+                            lines[i + 1].strip() == "DNF" and lines[i + 2].strip() == "DNF"))
+            if is_dnf_block:
+                # Skip past the 3 DNF rank lines (either 1 combined or 3 separate)
+                search_start = i + 1 if line == "DNF DNF DNF" else i + 3
+                # Search for the next integer that looks like a lot (1-2000) within next 5 lines
+                dnf_lot: int | None = None
+                lot_idx: int | None = None
+                for j in range(search_start, min(search_start + 5, len(lines))):
+                    v = lines[j].strip()
+                    if v.isdigit() and 1 <= int(v) <= 2000:
+                        dnf_lot = int(v)
+                        lot_idx = j
+                        break
+
+                if dnf_lot is not None and lot_idx is not None:
+                    # Parse athlete starting from the lot position
+                    athlete, consumed = parse_athlete_lines(lines, lot_idx, dnf_lot,
+                                                 current_age_group, current_gender, current_weight_cat)
+                    if athlete:
+                        athletes.append(athlete)
+                    # Skip past lot + exactly the lines consumed
+                    i = lot_idx + 1 + consumed
+                    continue
+                # If no lot found, just skip past the DNF lines
+                i = search_start
+                continue
+
+            # Handle DNF entries that represent an entire athlete (all attempts failed).
+            # In owlcms PDFs, a DNF-only athlete appears as "DNF" or "DNF DNF" followed
+            # by the lot number. These are NOT status markers for other athletes.
+            if line == "DNF" or line == "DNF DNF":
+                # Check if there's a lot number following within 5 lines
+                lot_idx = None
+                lot_val: int | None = None
+                for j in range(i + 1, min(i + 6, len(lines))):
+                    v = lines[j].strip()
+                    try:
+                        n = int(v)
+                        if 1 <= n <= 2000:
+                            lot_idx = j
+                            lot_val = n
+                            break
+                    except ValueError:
+                        pass
+                
+                if lot_idx is not None and lot_val is not None:
+                    # This IS a DNF athlete - parse it starting from the lot position
+                    athlete, consumed = parse_athlete_lines(lines, lot_idx, lot_val,
+                                                 current_age_group, current_gender, current_weight_cat)
+                    if athlete:
+                        athletes.append(athlete)
+                    # Skip past lot + exactly the lines consumed
+                    i = lot_idx + 1 + consumed
+                else:
+                    # No lot found - this is a status marker for another athlete
+                    # Just skip it and continue
                     pass
+                i += 1
+                continue
             
             i += 1
     
@@ -187,7 +282,7 @@ def parse_full_results(doc: fitz.Document) -> dict:
 
 
 def parse_athlete_lines(lines: list, start_idx: int, lot: int, 
-                        age_group: str, gender: str, weight_cat: str) -> dict | None:
+                        age_group: str, gender: str, weight_cat: str) -> tuple:
     """
     Parse athlete data starting from the lot number line.
     
@@ -195,8 +290,13 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
     the sequence is:
     Name (LAST, First), Team, Wt., Age,
     sn_1st, sn_2nd, sn_3rd, cj_1st, cj_2nd, cj_3rd, Total, Score
+    
+    Returns (athlete_dict | None, lines_consumed: int).
+    lines_consumed is the number of lines past start_idx that were consumed,
+    so callers can skip exactly that far without fragile fixed-line guesses.
     """
-    vals = []
+    vals: list[str] = []
+    last_consumed_idx = start_idx  # tracks the last line index we consumed
     for j in range(start_idx + 1, min(start_idx + 20, len(lines))):
         val = lines[j].strip()
         if not val:
@@ -207,7 +307,7 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
         if val.isdigit() and 1 <= int(val) <= 2000 and len(vals) >= 8:
             # Check if the next 3 lines are also small integers (ranks)
             # If so, this is the start of a new athlete row
-            next_vals = []
+            next_vals: list[int] = []
             for k in range(j, min(j + 4, len(lines))):
                 v = lines[k].strip()
                 if v.isdigit():
@@ -222,10 +322,19 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
             break
         if "Age Group" in val:
             break
+        # Stop at DNF boundary lines — but only after we've collected enough
+        # data for a valid athlete (at least a name). DNF as the first value
+        # after the lot is an attempt value inside the athlete's data, not a
+        # boundary between athletes.
+        if len(vals) >= 3 and (val == "DNF" or val == "DNF DNF" or val == "DNF DNF DNF"):
+            break
         vals.append(val)
+        last_consumed_idx = j
+    
+    lines_consumed = last_consumed_idx - start_idx
     
     if len(vals) < 5:
-        return None
+        return None, lines_consumed
     
     # Find name (first value containing a comma)
     name = None
@@ -236,20 +345,20 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
             name_idx = idx
             break
     
-    if name is None:
-        return None
+    if name is None or name_idx is None:
+        return None, lines_consumed
     
     remaining = vals[name_idx + 1:]
     
     if len(remaining) < 3:
-        return None
+        return None, lines_consumed
     
     # Team is the next value (may span multiple lines if no comma)
     team = remaining[0] if remaining else ""
     team_extra = []
     
     # Parse numeric values from the rest
-    nums = []
+    nums: list[float] = []
     for v in remaining[1:]:
         v_clean = v.replace("-", "").replace("DNF", "").strip()
         if v_clean:
@@ -275,7 +384,7 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
         athlete["bodyweight"] = nums[0]
         athlete["age"] = int(nums[1]) if nums[1] == int(nums[1]) else nums[1]
     else:
-        return athlete  # Insufficient data — return partial record
+        return athlete, lines_consumed  # Insufficient data — return partial record
     
     # Snatch attempts (3 values after age)
     if len(nums) >= 5:
@@ -290,13 +399,158 @@ def parse_athlete_lines(lines: list, start_idx: int, lot: int,
         athlete["cj_best"] = max(cj_attempts) if cj_attempts else 0
     
     # Total and Score
+    # In owlcms PDFs, "DNF" appears as text (not a number) on the total line when
+    # an athlete didn't complete a valid total (failed to make >=1 snatch AND >=1 cj).
+    # DNF means result of 0 — not "DNF" string, not None.
     if len(nums) >= 9:
         total = nums[8]
-        athlete["total"] = total if total > 0 else "DNF"
+        athlete["total"] = total if total > 0 else 0
+    else:
+        # Total line was "DNF" (text, filtered out of nums) or missing.
+        # Compute from best lifts if both exist; 0 if either is missing.
+        sn = float(athlete.get("snatch_best", 0) or 0)  # type: ignore[arg-type]
+        cj = float(athlete.get("cj_best", 0) or 0)  # type: ignore[arg-type]
+        athlete["total"] = (sn + cj) if (sn and cj and sn > 0 and cj > 0) else 0
     if len(nums) >= 10:
         athlete["score"] = nums[9]
     
-    return athlete
+    return athlete, lines_consumed
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Final Schedule parser
+# ──────────────────────────────────────────────────────────────────────
+
+PLATFORM_NAMES = {"WHITE", "BLUE", "RED", "GREEN", "YELLOW", "ORANGE"}
+
+def parse_final_schedule(doc: fitz.Document) -> dict:
+    """Parse owlcms Final Schedule PDF.
+    
+    Structure: each session has platform, weigh-in time, start time, gender,
+    age group, weight category, qualifying totals, entry count.
+    Each value is on a separate line.
+    """
+    sessions = []
+    
+    for page_num, page in enumerate(doc):
+        text = page.get_text()
+        lines = text.split("\n")
+        
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Skip headers
+            if any(skip in line for skip in ["owlcms", "Page ", "Age", "Weight", "Date",
+                                              "Session", "Platform", "Weigh-In", "Start",
+                                              "Gndr", "Group", "Category", "Entry Total",
+                                              "Grp", "Ses"]):
+                i += 1
+                continue
+            
+            # Detect session start: platform name (WHITE/BLUE/RED)
+            if line in PLATFORM_NAMES:
+                # Try to parse: platform, weigh_in, start, gender, age_group, 
+                # weight_cat, qualifying_totals, entry_count, entry_count
+                vals: list[str] = []
+                for j in range(i, min(i + 12, len(lines))):
+                    v = lines[j].strip()
+                    if not v:
+                        continue
+                    if v in ["owlcms", "Page "] or "Page " in v:
+                        break
+                    vals.append(v)
+                
+                if len(vals) >= 8:
+                    # Full format: platform, weigh_in, start, gender, age_group,
+                    # weight_category, qualifying_totals, entry_count
+                    gender_ok = vals[3] in ("M", "F")
+                    weight_cat_ok = any(c in vals[5] for c in "0123456789+BCD") and vals[5] not in PLATFORM_NAMES
+                    entry_ok = vals[7].isdigit() if len(vals) > 7 else False
+                    if gender_ok and weight_cat_ok and entry_ok:
+                        session = {
+                            "platform": vals[0],
+                            "weigh_in": vals[1],
+                            "start_time": vals[2],
+                            "gender": vals[3],
+                            "age_group": vals[4],
+                            "weight_category": vals[5],
+                            "qualifying_totals": vals[6],
+                            "entry_count": int(vals[7]),
+                        }
+                        sessions.append(session)
+                        i += len(vals)
+                        continue
+
+                # Condensed format: platform, weigh_in, start, gender, age_group
+                # (no weight category, qualifying totals, or entry count)
+                if len(vals) >= 5 and vals[3] in ("M", "F"):
+                    if len(vals) >= 6 and vals[5] in PLATFORM_NAMES:
+                        session = {
+                            "platform": vals[0],
+                            "weigh_in": vals[1],
+                            "start_time": vals[2],
+                            "gender": vals[3],
+                            "age_group": vals[4],
+                            "weight_category": "",
+                            "qualifying_totals": "",
+                            "entry_count": 0,
+                        }
+                        sessions.append(session)
+                        i += 5
+                        continue
+                    if len(vals) == 5:
+                        session = {
+                            "platform": vals[0],
+                            "weigh_in": vals[1],
+                            "start_time": vals[2],
+                            "gender": vals[3],
+                            "age_group": vals[4],
+                            "weight_category": "",
+                            "qualifying_totals": "",
+                            "entry_count": 0,
+                        }
+                        sessions.append(session)
+                        i += 5
+                        continue
+            
+            # WSO/ADAP sessions: no platform, no times. Format: age_group,
+            # weight_category, qualifying_totals, entry_count (4 values).
+            # These are adaptive/masters sessions grouped separately.
+            # Detect: age_group keyword followed by a weight-category-like value
+            WSO_AGE_GROUPS = {"ADAP", "WSO", "WSO U13", "WSO U17", "WSO JR", "WSO U25",
+                              "WSO W35", "WSO W40", "WSO W45", "WSO W50", "WSO W55",
+                              "WSO W60", "WSO M35", "WSO M40", "WSO M45", "WSO M50",
+                              "WSO M60"}
+            if line in WSO_AGE_GROUPS and i + 3 < len(lines):
+                # Check if next 3 lines look like weight_cat, qualifying_totals, entry_count
+                wc = lines[i + 1].strip() if i + 1 < len(lines) else ""
+                qt = lines[i + 2].strip() if i + 2 < len(lines) else ""
+                ec = lines[i + 3].strip() if i + 3 < len(lines) else ""
+                wc_has_digits = any(c in wc for c in "0123456789+BCD") and wc not in PLATFORM_NAMES
+                ec_is_digit = ec.isdigit()
+                if wc_has_digits and ec_is_digit:
+                    session = {
+                        "platform": "",
+                        "weigh_in": "",
+                        "start_time": "",
+                        "gender": "",
+                        "age_group": line,
+                        "weight_category": wc,
+                        "qualifying_totals": qt,
+                        "entry_count": int(ec),
+                    }
+                    sessions.append(session)
+                    i += 4
+                    continue
+            
+            i += 1
+    
+    return {
+        "pdf_type": "final_schedule",
+        "total_sessions": len(sessions),
+        "sessions": sessions,
+    }
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -383,7 +637,7 @@ def parse_start_list(doc: fitz.Document) -> dict:
             
             if line.isdigit() and 1 <= int(line) <= 2000:
                 lot = int(line)
-                vals = []
+                vals: list[str] = []
                 for j in range(i + 1, min(i + 15, len(lines))):
                     val = lines[j].strip()
                     if not val:
@@ -400,9 +654,9 @@ def parse_start_list(doc: fitz.Document) -> dict:
                         name_idx = idx
                         break
                 
-                if name and name_idx + 1 < len(vals):
+                if name and name_idx is not None and name_idx + 1 < len(vals):
                     team = vals[name_idx + 1] if name_idx + 1 < len(vals) else ""
-                    nums = []
+                    nums: list[float] = []
                     for v in vals[name_idx + 2:]:
                         try:
                             nums.append(float(v))
@@ -436,7 +690,8 @@ def parse_start_list(doc: fitz.Document) -> dict:
 
 def download_drive_file(file_id: str, output_path: str, account: str = "personal"):
     """Download a file from Google Drive via google_api.py helper."""
-    import subprocess, os
+    import subprocess
+    import os
     # Resolve google_api.py from productivity skill or fallback
     candidates = [
         os.path.expanduser("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"),
@@ -463,7 +718,9 @@ def download_drive_file(file_id: str, output_path: str, account: str = "personal
 
 def list_drive_folder(folder_id: str, account: str = "personal"):
     """List PDF files in a Google Drive results folder."""
-    import subprocess, json, os
+    import subprocess
+    import json
+    import os
     candidates = [
         os.path.expanduser("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"),
         os.path.expanduser("/opt/data/skills/productivity/google-workspace/scripts/google_api.py"),
@@ -492,13 +749,15 @@ def list_drive_folder(folder_id: str, account: str = "personal"):
 # ──────────────────────────────────────────────────────────────────────
 
 FILE_NAME_PATTERNS = {
-    "full_results": re.compile(r"Results\.pdf$", re.IGNORECASE),
+    # Specific patterns first — they must be checked before the generic
+    # full_results pattern, which matches any filename ending in "Results.pdf"
     "best_lifters": re.compile(r"Results\s*-\s*(.+?)\s*Best\s*Lifters\.pdf$", re.IGNORECASE),
     "teams": re.compile(r"Results\s*-\s*(.+?)\s*Teams\.pdf$", re.IGNORECASE),
     "medal_schedule": re.compile(r"Medal\s*Schedule\.pdf$", re.IGNORECASE),
     "registered_teams": re.compile(r"Registered\s*Teams\.pdf$", re.IGNORECASE),
     "glen_middleton": re.compile(r"Glen\s*Middleton.*\.pdf$", re.IGNORECASE),
     "start_list": re.compile(r"start.?list", re.IGNORECASE),
+    "full_results": re.compile(r"Results\.pdf$", re.IGNORECASE),
 }
 
 DIVISION_CODES = {
@@ -535,13 +794,15 @@ def parse_pdf(pdf_path: str) -> dict:
     file_info = classify_file_name(Path(pdf_path).name)
     
     if pdf_type == "full_results":
-        result = parse_full_results(doc)
+        result: dict = parse_full_results(doc)
     elif pdf_type == "best_lifters":
         result = parse_best_lifters(doc)
     elif pdf_type == "start_list":
         result = parse_start_list(doc)
     elif pdf_type == "medal_schedule":
         result = {"pdf_type": "medal_schedule", "note": "Medal schedule parsing not implemented"}
+    elif pdf_type == "final_schedule":
+        result = parse_final_schedule(doc)
     else:
         result = {"pdf_type": "unknown", "note": "Could not determine PDF type"}
     

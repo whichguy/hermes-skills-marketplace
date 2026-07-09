@@ -674,7 +674,8 @@ def _append_run_learning(name: str, request: str, result: dict, terminal: str | 
     return {"learnings_text": "", "references": "", "failure_conditions": []}
 
 
-def _run(request: str, name: str, *, run_task=None, repo=None, keep_branch: bool = False) -> dict:
+def _run(request: str, name: str, *, run_task=None, repo=None, keep_branch: bool = False,
+         keep_worktree: bool = False) -> dict:
     """Drive ONE devloop run_task and translate its result into pipeline.py's dispatch_result shape.
     run_task is injectable so this is testable without an LLM.
 
@@ -696,7 +697,7 @@ def _run(request: str, name: str, *, run_task=None, repo=None, keep_branch: bool
     root = os.path.join(repo, ".worktrees")
     pre_status = _repo_status(repo)      # boundary-guard baseline (see _restore_boundary_breach)
     t0 = time.time()
-    res = run_task(repo, request, root, name)
+    res = run_task(repo, request, root, name, keep_worktree=keep_worktree)
     elapsed = time.time() - t0
     result = res.get("result") or {}
     wt = res.get("worktree") or {}
@@ -718,11 +719,17 @@ def _run(request: str, name: str, *, run_task=None, repo=None, keep_branch: bool
     # N2: capture the rich fields extracted by _append_run_learning so they can
     # be passed directly in devloop_result — no re-extraction in project.py.
     _rich = _append_run_learning(name, request, result, terminal, reason, commit_msg=commit_msg)
-    try:
-        fin = _worktree_mod().finalize(wt, commit_msg) if wt.get("path") \
-            else {"changed": [], "committed": False, "branch_kept": False, "worktree_removed": False}
-    except Exception:   # noqa: BLE001 — cleanup is best-effort, never a failure path
-        fin = {"changed": [], "committed": False, "branch_kept": False, "worktree_removed": False}
+    if keep_worktree and wt.get("path"):
+        # keep_worktree (advisor review 2026-07-09): skip finalize entirely, leaving the
+        # worktree directory + run_dir artifacts (trace, judge_verdicts, progress, etc.)
+        # in place for inspection. Useful for debugging and the diagnostic sprint.
+        fin = {"changed": [], "committed": False, "branch_kept": True, "worktree_removed": False}
+    else:
+        try:
+            fin = _worktree_mod().finalize(wt, commit_msg) if wt.get("path") \
+                else {"changed": [], "committed": False, "branch_kept": False, "worktree_removed": False}
+        except Exception:   # noqa: BLE001 — cleanup is best-effort, never a failure path
+            fin = {"changed": [], "committed": False, "branch_kept": False, "worktree_removed": False}
     fin["branch"] = wt.get("branch")
     fin["repo_path"] = wt.get("repo")
     needs_human = terminal == "HUMAN_REVIEW"
@@ -910,17 +917,21 @@ def _honor_timeout(timeout) -> None:
         os.environ["DEVLOOP_DISPATCH_TIMEOUT_S"] = str(t)
 
 
-def run_build(message: str, timeout=None, repo=SCRATCH, keep_branch: bool = False) -> dict:
+def run_build(message: str, timeout=None, repo=SCRATCH, keep_branch: bool = False,
+              keep_worktree: bool = False) -> dict:
     """build_code -> devloop. The DoD is derived from `message` by devloop's own CHARTER phase.
     `repo`: SCRATCH (the default) -> fresh scratch workspace; a caller-validated path -> modify
     that repo; None -> fail-safe alias for SCRATCH (never an implicit cwd).
-    `keep_branch`: leave a COMPLETE run's verified branch unmerged (PR-style workflows)."""
+    `keep_branch`: leave a COMPLETE run's verified branch unmerged (PR-style workflows).
+    `keep_worktree`: skip worktree cleanup entirely, leaving the worktree + run_dir artifacts
+    (trace, judge_verdicts, progress, etc.) in place for inspection (debugging/diagnostics)."""
     _honor_timeout(timeout)
-    return _run(message, _name("build"), repo=repo, keep_branch=keep_branch)
+    return _run(message, _name("build"), repo=repo, keep_branch=keep_branch,
+                keep_worktree=keep_worktree)
 
 
 def run_debug(message: str, code=None, error_feedback=None, timeout=None, repo=SCRATCH,
-              keep_branch: bool = False) -> dict:
+              keep_branch: bool = False, keep_worktree: bool = False) -> dict:
     """debug_cascade -> devloop. Fold the failing code + error into the request so the CHARTER phase
     has the full repair context (devloop has no separate debug entrypoint — it is one build loop)."""
     _honor_timeout(timeout)
@@ -929,4 +940,5 @@ def run_debug(message: str, code=None, error_feedback=None, timeout=None, repo=S
         request += "\n\nCURRENT CODE:\n" + str(code)[:4000]
     if error_feedback:
         request += "\n\nERROR / FAILURE:\n" + str(error_feedback)[:2000]
-    return _run(request, _name("debug"), repo=repo, keep_branch=keep_branch)
+    return _run(request, _name("debug"), repo=repo, keep_branch=keep_branch,
+                keep_worktree=keep_worktree)

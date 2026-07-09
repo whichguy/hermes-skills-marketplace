@@ -37,8 +37,6 @@ KINDS
                                       {"category": ..., "severity": 1-5}'). If you don't, it replies
                                       {"result": <its output>}. The step's parsed reply is stored in
                                       state under the state's name.
-  "agent":  "<instruction text>"   -> a full agent turn with tools (get_state / set_state to read and
-                                      write workflow state live).
   "ask":    "<question text>"      -> ask the HUMAN. The workflow pauses until they answer; the answer
                                       is stored as {"decision": <answer>}. Give it "options" (a list
                                       of short labels) when the answer should be one of a few choices.
@@ -47,8 +45,8 @@ ROUTING (the graph edges)
   - DEFAULT: no routing keys at all -> the workflow simply proceeds to the NEXT state you declared;
     the LAST declared state finishes at @done. Linear flows need zero routing.
   - "next": "<state-or-@terminal>" -> an explicit unconditional edge (jumps and loops back are fine).
-  - "routes": {"<label>": "<target>", ...} on a prompt/agent/ask state -> a decision among edges.
-    For prompt/agent, the step's reply DECLARES its exit: include "outcome": "<label>" in the JSON
+  - "routes": {"<label>": "<target>", ...} on a prompt/ask state -> a decision among edges.
+    For prompt, the step's reply DECLARES its exit: include "outcome": "<label>" in the JSON
     (the engine states the exact menu before your instruction at runtime, and an independent judge
     is the fallback if the field is missing) — give each label a condition with the object form:
       "routes": {"valid":   {"to": "payout",  "means": "the claim fully satisfies policy"},
@@ -61,7 +59,7 @@ ROUTING (the graph edges)
     Use `when` whenever the condition is a value/range test — never spend a model call on arithmetic.
 
 CONVERSATION
-  A workflow's prompt/agent steps share ONE running conversation by default (later steps see earlier
+  A workflow's prompt steps share ONE running conversation by default (later steps see earlier
   exchanges), and ask-gate questions + the human's answers join it as turns. Add "context":
   "isolated" on a step (or at the top of the spec) for steps that should see only their own
   instruction. Do NOT add "next" to a state that has routes (routes are binding; that next would be
@@ -84,7 +82,7 @@ STATE + INTERPOLATION (how data flows)
   ("$${$.amount}" comes out as dead literal text). Write "${$.amount} USD" or "${$.amount} dollars".
 
 INTERRUPTIONS (automatic — do not write instructions for this)
-  Any prompt/agent step can pause the workflow to ask the human for missing information, and the
+  Any prompt step can pause the workflow to ask the human for missing information, and the
   judge can pause it when an output cannot be clearly routed. The engine teaches the model how; you
   just write the task.
 

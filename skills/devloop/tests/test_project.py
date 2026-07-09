@@ -315,7 +315,7 @@ def test_devloop_result_has_rich_fields():
     directly in devloop_result (not just commit_message)."""
     import devloop_bridge as _br
     # Use a fake run_task that returns a HUMAN_REVIEW result
-    fake = lambda repo, request, root, name: {
+    fake = lambda repo, request, root, name, **kw: {
         "result": {"terminal": "HUMAN_REVIEW", "reason": "ambiguous target"},
         "worktree": {}, "charter": {}}
     orig_sr, orig_ws = _br._scratch_repo, _br._WRITE_SAFE

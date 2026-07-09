@@ -123,6 +123,66 @@ def tiers_checks():
     print("  PASS ask_run.sh (--no-sync flag + nonce provenance + clean validation + backup retention)")
 
 
+def author_flow_offline_checks():
+    # The live authoring eval is pytest/model-backed, but this regression is pure stdlib:
+    # wrapper.write_flow must preserve state declaration order because sequential fall-through
+    # makes that order semantic. Also pin the eval harness to the interpreter's current kind set:
+    # the cheatsheet must not teach unsupported kinds, and generated flow files must not pass
+    # unsupported load_workflow kwargs.
+    import importlib.util
+    import json
+    import tempfile
+    import workflow
+
+    eval_dir = os.path.join(ROOT, "evals", "author_flow_eval")
+    wrapper_path = os.path.join(eval_dir, "wrapper.py")
+    spec_mod = importlib.util.spec_from_file_location("author_flow_eval_wrapper", wrapper_path)
+    wrapper = importlib.util.module_from_spec(spec_mod)
+    spec_mod.loader.exec_module(wrapper)
+    cheatsheet_path = os.path.join(eval_dir, "cheatsheet.py")
+    spec_mod = importlib.util.spec_from_file_location("author_flow_eval_cheatsheet", cheatsheet_path)
+    cheatsheet = importlib.util.module_from_spec(spec_mod)
+    spec_mod.loader.exec_module(cheatsheet)
+
+    spec = {"id": "order_pin", "version": 1, "start": "zeta",
+            "states": {"zeta": {"run": "begin"},
+                       "alpha": {"run": "record"},
+                       "mid": {"run": "finish"}}}
+    with tempfile.TemporaryDirectory() as td:
+        path = wrapper.write_flow(spec, os.path.join(td, "flow.py"))
+        with open(path, encoding="utf-8") as f:
+            src = f.read()
+    embedded = json.loads(src.split("SPEC = ", 1)[1].rsplit("\nflow =", 1)[0])
+    assert list(embedded["states"]) == ["zeta", "alpha", "mid"], \
+        "author_flow_eval wrapper sorted/reordered states"
+    assert "agent=" not in src, "author_flow_eval wrapper passed unsupported load_workflow(agent=)"
+    assert '"agent"' not in cheatsheet.FORMAT, "author_flow_eval cheatsheet teaches unsupported agent kind"
+    assert "agent" not in workflow._KINDS, "offline pin is stale; restore L6 authoring eval coverage"
+    print("  PASS author-flow offline wrapper order + supported kind surface")
+
+
+def standalone_checks():
+    # These edge-case scripts predate the ladder grouping. Keep them in the default suite so
+    # schema-validation, regex matching, map stress, and journal-mutation checks do not bit-rot.
+    import subprocess
+
+    scripts = [
+        "test_answer_fuzz.py",
+        "test_on_error_fuzz.py",
+        "test_map_fuzz.py",
+        "test_mutations.py",
+    ]
+    for script in scripts:
+        path = os.path.join(HERE, script)
+        p = subprocess.run([sys.executable, path], cwd=ROOT, capture_output=True, text=True)
+        if p.returncode != 0:
+            sys.stdout.write(p.stdout)
+            sys.stderr.write(p.stderr)
+            raise AssertionError("%s failed" % script)
+        sys.stdout.write(p.stdout)
+    print("  PASS standalone edge checks")
+
+
 def walkthrough_check(evidence=False):
     # The narrated demos are self-checking; run them on both engines so they can't
     # bit-rot. Quiet-unless-fail normally; in evidence mode their full narration (exit
@@ -176,6 +236,8 @@ def main(argv=None):
     paths_checks()
     retired_strings_check()
     tiers_checks()
+    author_flow_offline_checks()
+    standalone_checks()
     walkthrough_check(evidence=args.evidence)
     rc = 0
     ladder_args = ["--evidence"] if args.evidence else []

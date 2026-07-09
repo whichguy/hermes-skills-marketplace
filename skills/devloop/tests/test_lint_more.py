@@ -112,6 +112,183 @@ def test_lint_paths_js_check_runs_against_the_file():
         assert lint.lint_paths([good])[0] is True                       # valid JS passes the same builder
 
 
+# --- gap 7: stdlib-only linters for TOML, XML, Shell, C (P1 additions 2026-07-08) -------------
+def test_lint_paths_toml_valid_and_invalid():
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.toml"); open(good, "w").write('[section]\nkey = "value"\n')
+        bad = os.path.join(d, "bad.toml"); open(bad, "w").write('[section\nkey = value\n')
+        assert lint.lint_paths([good])[0] is True
+        ok, res = lint.lint_paths([bad])
+        assert ok is False and lint.failures(res)
+
+
+def test_lint_paths_xml_valid_and_invalid():
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.xml"); open(good, "w").write("<root><child/></root>\n")
+        bad = os.path.join(d, "bad.xml"); open(bad, "w").write("<root><child></root>\n")
+        assert lint.lint_paths([good])[0] is True
+        ok, res = lint.lint_paths([bad])
+        assert ok is False and lint.failures(res)
+
+
+def test_lint_paths_shell_valid_and_invalid():
+    if not lint._on_path("bash"):
+        return
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.sh"); open(good, "w").write("#!/bin/bash\necho hello\n")
+        bad = os.path.join(d, "bad.sh"); open(bad, "w").write("if then fi\n")
+        assert lint.lint_paths([good])[0] is True
+        ok, res = lint.lint_paths([bad])
+        assert ok is False and lint.failures(res)
+
+
+def test_lint_paths_c_valid_and_invalid():
+    if not lint._on_path("gcc"):
+        return
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.c"); open(good, "w").write("int main(void) { return 0; }\n")
+        bad = os.path.join(d, "bad.c"); open(bad, "w").write("int main(void { return 0; }\n")
+        assert lint.lint_paths([good])[0] is True
+        ok, res = lint.lint_paths([bad])
+        assert ok is False and lint.failures(res)
+
+
+def test_lint_paths_makefile_valid():
+    if not lint._on_path("make"):
+        return
+    with tempfile.TemporaryDirectory() as d:
+        mk = os.path.join(d, "Makefile"); open(mk, "w").write("all:\n\techo hello\n")
+        assert lint.lint_paths([mk])[0] is True
+
+
+def test_ruff_finds_undefined_name():
+    """Ruff (F821) catches undefined names that py-syntax (compile) misses."""
+    if not lint._on_path("ruff"):
+        return
+    with tempfile.TemporaryDirectory() as d:
+        bad = os.path.join(d, "bad.py"); open(bad, "w").write("undefined_name_var\n")
+        ok, res = lint.lint_paths([bad])
+        ruff_results = [r for r in res if r.get("linter") == "ruff"]
+        assert ruff_results, "ruff should have been run"
+        assert ruff_results[0]["exit_code"] != 0, "ruff should flag F821"
+
+
+def test_file_key_handles_extensionless_files():
+    """_file_key returns basename for extensionless files like Makefile."""
+    assert lint._file_key("Makefile") == "makefile"
+    assert lint._file_key("/path/to/Makefile") == "makefile"
+    assert lint._file_key("script.sh") == ".sh"
+    assert lint._file_key("config.TOML") == ".toml"
+
+
+def test_lint_paths_yaml_valid_and_invalid():
+    """YAML linter (PyYAML) catches invalid YAML."""
+    if not lint._has_module("yaml"):
+        return
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.yaml"); open(good, "w").write("key: value\nlist:\n  - a\n  - b\n")
+        bad = os.path.join(d, "bad.yaml"); open(bad, "w").write("key: [unclosed\n")
+        assert lint.lint_paths([good])[0] is True
+        ok, res = lint.lint_paths([bad])
+        assert ok is False and lint.failures(res)
+
+
+def test_lint_paths_sql_valid():
+    """SQL linter (sqlparse) parses valid SQL without error."""
+    if not lint._has_module("sqlparse"):
+        return
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.sql"); open(good, "w").write("SELECT * FROM users WHERE id = 1;\n")
+        assert lint.lint_paths([good])[0] is True
+
+
+# --- P0: _resolve_exe finds venv-installed tools (prevents wired-but-never-functional) --------
+# The ruff venv-bin bug: _on_path() used only shutil.which (PATH), which doesn't
+# include /opt/data/.venv/bin. Ruff was wired in _LANGUAGES but silently skipped
+# on every run since devloop's inception. These tests prevent that pattern.
+
+def test_resolve_exe_returns_path_for_known_tool():
+    """_resolve_exe('ruff') must return a real path (not just 'ruff') when ruff is
+    installed in the venv. If it returns the bare name, subprocess.run will fail
+    to find it (the wired-but-never-functional pattern)."""
+    ruff_path = lint._resolve_exe("ruff")
+    # Must be an absolute path, not the bare exe name
+    assert ruff_path != "ruff", (
+        "_resolve_exe('ruff') returned the bare name 'ruff' — the venv-bin bug. "
+        "ruff is installed at /opt/data/.venv/bin/ruff but _resolve_exe can't find it. "
+        "Check sys.prefix/bin, dirname(sys.executable), and /opt/data/.venv/bin."
+    )
+    assert os.path.isfile(ruff_path), f"resolve_exe returned {ruff_path} but file doesn't exist"
+    assert os.access(ruff_path, os.X_OK), f"resolve_exe returned {ruff_path} but not executable"
+
+
+def test_resolve_exe_fallback_for_missing_tool():
+    """_resolve_exe('nonexistent_tool_xyz') returns the bare name (lets subprocess try PATH).
+    This is the correct fallback behavior — not None, not empty, just the name."""
+    result = lint._resolve_exe("nonexistent_tool_xyz_12345")
+    assert result == "nonexistent_tool_xyz_12345", (
+        f"Expected bare name fallback, got {result!r}"
+    )
+
+
+def test_on_path_finds_venv_tools():
+    """_on_path('ruff') must return True when ruff is installed in the venv.
+    This is the function _LANGUAGES builders use for available() checks —
+    if it returns False, the linter is silently skipped."""
+    assert lint._on_path("ruff") is True, (
+        "_on_path('ruff') returned False — the venv-bin bug. "
+        "Ruff is wired in _LANGUAGES but _on_path can't discover it. "
+        "Check that _on_path checks sys.prefix/bin and /opt/data/.venv/bin, not just PATH."
+    )
+
+
+def test_on_path_returns_false_for_missing():
+    """_on_path returns False for a tool that genuinely doesn't exist."""
+    assert lint._on_path("nonexistent_tool_xyz_12345") is False
+
+
+def test_py_linters_all_available_and_runnable():
+    """All four Python linters (py-syntax, pyflakes, ruff, mypy) must be available AND produce
+    the correct exit code on a clean file. This is the integration check — available()
+    returning True but the linter failing to spawn is the wired-but-never-functional
+    pattern in its most dangerous form."""
+    with tempfile.TemporaryDirectory() as d:
+        clean = os.path.join(d, "clean.py")
+        open(clean, "w").write("def add(a, b):\n    return a + b\n")
+        ok, results = lint.lint_paths([clean])
+        # All four must have run (not skipped)
+        skipped = [r for r in results if "skipped" in r]
+        assert not skipped, f"Expected 0 skipped, got {len(skipped)}: {skipped}"
+        # All must pass (exit_code 0)
+        failed = lint.failures(results)
+        assert not failed, f"Clean .py file should pass all linters: {failed}"
+
+
+def test_lint_paths_cpp_valid_and_invalid():
+    """g++ -fsyntax-only must accept valid C++ and reject invalid C++."""
+    with tempfile.TemporaryDirectory() as d:
+        good = os.path.join(d, "good.cpp")
+        bad = os.path.join(d, "bad.cpp")
+        open(good, "w").write("#include \u003cvector\u003e\nint main() { std::vector\u003cint\u003e v; return 0; }\n")
+        open(bad, "w").write("int main() { std::vector\u003cint\u003e v; return 0; }\n")  # missing include
+        ok, results = lint.lint_paths([good])
+        assert ok, f"Valid C++ should lint clean: {results}"
+        ok, results = lint.lint_paths([bad])
+        assert not ok, f"Invalid C++ should fail lint: {results}"
+
+
+def test_lint_paths_pyflakes_catches_undefined_name():
+    """pyflakes must catch an undefined name that ruff may also catch, but the test pins
+    the builder is wired and executable."""
+    with tempfile.TemporaryDirectory() as d:
+        bad = os.path.join(d, "bad.py")
+        open(bad, "w").write("print(undefined_var)\n")
+        ok, results = lint.lint_paths([bad])
+        pyflakes_results = [r for r in results if r.get("linter") == "pyflakes"]
+        assert pyflakes_results, "pyflakes did not run on .py file"
+        assert pyflakes_results[0].get("exit_code") != 0, "pyflakes should flag undefined name"
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

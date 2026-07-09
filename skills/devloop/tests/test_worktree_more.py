@@ -20,8 +20,8 @@ import worktree  # noqa: E402
 import state  # noqa: E402
 
 
-def _git(repo, *args):
-    subprocess.run(["git", "-C", repo, *args], check=True, capture_output=True, text=True)
+def _git(repo, *args, check=True):
+    return subprocess.run(["git", "-C", repo, *args], check=check, capture_output=True, text=True)
 
 
 def _init_repo(repo):
@@ -943,6 +943,319 @@ def test_diagnostic_event_rejects_bad_level():
     except AssertionError:
         raised = True
     assert raised, "state.ev should have raised AssertionError for an invalid level"
+
+
+# --- _resolve_conflicts: LLM conflict resolution guard (P2 from advisor review) ----
+
+def _repo_with_conflict(repo):
+    """Create a git repo with a merge conflict on a.py (not a test file).
+    Uses the existing _init_repo (which creates a.py and commits it), then
+    branches to create the conflict."""
+    # _init_repo already did: a.py='x=1', committed on default branch
+    _init_repo(repo)
+    # Create a feature branch that changes a.py
+    _git(repo, "checkout", "-q", "-b", "feature")
+    with open(os.path.join(repo, "a.py"), "w") as f:
+        f.write("x = 2\n")
+    _git(repo, "add", "a.py")
+    _git(repo, "commit", "-q", "-m", "feature change")
+    # Back to default branch, change a.py differently
+    try:
+        _git(repo, "checkout", "-q", "main")
+    except Exception:
+        _git(repo, "checkout", "-q", "master")
+    with open(os.path.join(repo, "a.py"), "w") as f:
+        f.write("x = 3\n")
+    _git(repo, "add", "a.py")
+    _git(repo, "commit", "-q", "-m", "main change")
+    # Merge feature into main → conflict
+    _git(repo, "merge", "feature", check=False)  # this will fail with conflict
+    return repo
+
+
+def test_resolve_conflicts_no_resolver_refuses():
+    """No resolver provided → refuse, branch left for review."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _repo_with_conflict(repo)
+        ok, why, events = worktree._resolve_conflicts(repo, None)
+        assert ok is False
+        assert "branch left for review" in why
+
+
+def test_resolve_conflicts_test_file_conflict_refuses():
+    """Conflict touching a test file → refuse (tests are the oracle)."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _init_repo(repo)  # creates a.py, commits on default branch
+        # feature branch changes a.py AND adds test_a.py
+        _git(repo, "checkout", "-q", "-b", "feature")
+        with open(os.path.join(repo, "test_a.py"), "w") as f:
+            f.write("assert True\n")
+        _git(repo, "add", "test_a.py")
+        _git(repo, "commit", "-q", "-m", "feature adds test")
+        # main branch changes test_a.py differently
+        try:
+            _git(repo, "checkout", "-q", "main")
+        except Exception:
+            _git(repo, "checkout", "-q", "master")
+        with open(os.path.join(repo, "test_a.py"), "w") as f:
+            f.write("assert False\n")
+        _git(repo, "add", "test_a.py")
+        _git(repo, "commit", "-q", "-m", "main changes test")
+        _git(repo, "merge", "feature", check=False)
+        # Now resolve with a dummy resolver — should refuse because test file
+        ok, why, events = worktree._resolve_conflicts(repo, lambda p, c: True)
+        assert ok is False
+        assert "TEST" in why or "test" in why.lower()
+
+
+def test_resolve_conflicts_resolver_crash_refuses():
+    """A crashed resolver → refuse, never crash past the guard."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _repo_with_conflict(repo)
+        def crash(p, c):
+            raise RuntimeError("LLM API down")
+        ok, why, events = worktree._resolve_conflicts(repo, crash)
+        assert ok is False
+        assert "crashed" in why.lower()
+
+
+def test_resolve_conflicts_resolver_returns_false_refuses():
+    """Resolver returns False → refuse."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _repo_with_conflict(repo)
+        ok, why, events = worktree._resolve_conflicts(repo, lambda p, c: False)
+        assert ok is False
+        assert "failed" in why.lower() or "refused" in why.lower()
+
+
+def test_resolve_conflicts_resolver_succeeds():
+    """A resolver that actually resolves the conflict → ok=True."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _repo_with_conflict(repo)
+        def good_resolver(path, conflicted):
+            # Write a resolved version of each conflicted file
+            for p in conflicted:
+                with open(os.path.join(path, p), "w") as f:
+                    f.write("x = 42\n")  # resolved: no conflict markers
+            return True
+        ok, why, events = worktree._resolve_conflicts(repo, good_resolver)
+        assert ok is True
+        assert why == ""
+
+
+def test_resolve_conflicts_markers_remain_refuses():
+    """Resolver claims success but leaves conflict markers → refuse."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _repo_with_conflict(repo)
+        def lying_resolver(path, conflicted):
+            for p in conflicted:
+                with open(os.path.join(path, p), "w") as f:
+                    f.write("<<<<<<< HEAD\nx = 2\n=======\nx = 3\n>>>>>>> feature\n")
+            return True
+        ok, why, events = worktree._resolve_conflicts(repo, lying_resolver)
+        assert ok is False
+        assert "markers remain" in why.lower()
+
+
+def test_resolve_conflicts_resolver_deletes_conflicted_file_refuses():
+    """Resolver deletes a conflicted file → refuse (file missing after resolution)."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _repo_with_conflict(repo)
+        def deleting_resolver(path, conflicted):
+            for p in conflicted:
+                os.remove(os.path.join(path, p))
+            return True
+        ok, why, events = worktree._resolve_conflicts(repo, deleting_resolver)
+        assert ok is False
+        assert "deleted" in why.lower()
+        assert any(e["step"] == "conflicted-file-deleted" for e in events)
+
+
+# --- _sync_and_verify: pre-merge sync safety net (P2 from advisor review) ----------
+
+def test_sync_and_verify_clean_merge_passes():
+    """A clean merge (no conflicts) with passing regression → ok=True."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _init_repo(repo)  # creates a.py, commits on default branch
+        # Create branch
+        _git(repo, "checkout", "-q", "-b", "run1")
+        with open(os.path.join(repo, "b.py"), "w") as f:
+            f.write("y = 2\n")
+        _git(repo, "add", "b.py")
+        _git(repo, "commit", "-q", "-m", "run1 work")
+        # Target advances
+        try:
+            _git(repo, "checkout", "-q", "main")
+        except Exception:
+            _git(repo, "checkout", "-q", "master")
+        with open(os.path.join(repo, "c.py"), "w") as f:
+            f.write("z = 3\n")
+        _git(repo, "add", "c.py")
+        _git(repo, "commit", "-q", "-m", "target advance")
+        target_tip = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                     capture_output=True, text=True).stdout.strip()
+        # Sync: merge target into run1 — should be clean (no overlap)
+        ok, why, notes = worktree._sync_and_verify(
+            repo, "run1", target_tip, lambda p: (True, "green"))
+        assert ok is True
+
+
+def test_sync_and_verify_regression_fail_strips_commits():
+    """A clean merge but failing regression → ok=False, sync commits stripped."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _init_repo(repo)
+        _git(repo, "checkout", "-q", "-b", "run1")
+        with open(os.path.join(repo, "b.py"), "w") as f:
+            f.write("y = 2\n")
+        _git(repo, "add", "b.py")
+        _git(repo, "commit", "-q", "-m", "run1 work")
+        try:
+            _git(repo, "checkout", "-q", "main")
+        except Exception:
+            _git(repo, "checkout", "-q", "master")
+        with open(os.path.join(repo, "c.py"), "w") as f:
+            f.write("z = 3\n")
+        _git(repo, "add", "c.py")
+        _git(repo, "commit", "-q", "-m", "target advance")
+        target_tip = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                     capture_output=True, text=True).stdout.strip()
+        ok, why, notes = worktree._sync_and_verify(
+            repo, "run1", target_tip, lambda p: (False, "tests failed"))
+        assert ok is False
+        assert "failed regression" in why or "branch left for review" in why
+
+
+def test_sync_and_verify_fixer_success():
+    """Fixer fixes the combined tree and regression passes on re-check → ok=True."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _init_repo(repo)
+        _git(repo, "checkout", "-q", "-b", "run1")
+        with open(os.path.join(repo, "b.py"), "w") as f:
+            f.write("y = 2\n")
+        _git(repo, "add", "b.py")
+        _git(repo, "commit", "-q", "-m", "run1 work")
+        try:
+            _git(repo, "checkout", "-q", "main")
+        except Exception:
+            _git(repo, "checkout", "-q", "master")
+        with open(os.path.join(repo, "c.py"), "w") as f:
+            f.write("z = 3\n")
+        _git(repo, "add", "c.py")
+        _git(repo, "commit", "-q", "-m", "target advance")
+        target_tip = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                     capture_output=True, text=True).stdout.strip()
+
+        call_count = [0]
+        def flaky_regression(path):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return (False, "initial fail")
+            return (True, "fixed")
+
+        def fixer(path, why):
+            # Actually make a change so the fixer commit has something to commit
+            with open(os.path.join(path, "fixer_marker.py"), "w") as f:
+                f.write("# fixed\n")
+            return True
+
+        ok, why, notes = worktree._sync_and_verify(
+            repo, "run1", target_tip, flaky_regression, fixer=fixer)
+        assert ok is True
+        assert notes["fixed"] is True
+
+
+def test_sync_and_verify_fixer_crash_refuses():
+    """Fixer crashes during the one bounded attempt → ok=False, regression stays red."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _init_repo(repo)
+        _git(repo, "checkout", "-q", "-b", "run1")
+        with open(os.path.join(repo, "b.py"), "w") as f:
+            f.write("y = 2\n")
+        _git(repo, "add", "b.py")
+        _git(repo, "commit", "-q", "-m", "run1 work")
+        try:
+            _git(repo, "checkout", "-q", "main")
+        except Exception:
+            _git(repo, "checkout", "-q", "master")
+        with open(os.path.join(repo, "c.py"), "w") as f:
+            f.write("z = 3\n")
+        _git(repo, "add", "c.py")
+        _git(repo, "commit", "-q", "-m", "target advance")
+        target_tip = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                     capture_output=True, text=True).stdout.strip()
+
+        check_calls = []
+        def red_check(path):
+            check_calls.append(path)
+            return (False, "still red")
+
+        def crashing_fixer(path, why):
+            raise RuntimeError("fixer exploded")
+
+        ok, why, notes = worktree._sync_and_verify(
+            repo, "run1", target_tip, red_check, fixer=crashing_fixer)
+        assert ok is False
+        assert notes["fixed"] is False
+        assert len(check_calls) == 1  # no re-check after crashed fixer
+
+
+def test_sync_and_verify_fixer_succeeds_recheck_fails_strips_commits():
+    """Fixer commits a real change but the regression re-check still fails → ok=False,
+    sync/fix commits stripped from the branch."""
+    with tempfile.TemporaryDirectory() as root:
+        repo = os.path.join(root, "repo")
+        _init_repo(repo)
+        _git(repo, "checkout", "-q", "-b", "run1")
+        with open(os.path.join(repo, "b.py"), "w") as f:
+            f.write("y = 2\n")
+        _git(repo, "add", "b.py")
+        _git(repo, "commit", "-q", "-m", "run1 work")
+        try:
+            _git(repo, "checkout", "-q", "main")
+        except Exception:
+            _git(repo, "checkout", "-q", "master")
+        with open(os.path.join(repo, "c.py"), "w") as f:
+            f.write("z = 3\n")
+        _git(repo, "add", "c.py")
+        _git(repo, "commit", "-q", "-m", "target advance")
+        target_tip = subprocess.run(["git", "-C", repo, "rev-parse", "HEAD"],
+                                     capture_output=True, text=True).stdout.strip()
+
+        run_head_before = subprocess.run(
+            ["git", "-C", repo, "rev-parse", "run1"],
+            capture_output=True, text=True).stdout.strip()
+
+        check_calls = []
+        def always_red(path):
+            check_calls.append(path)
+            return (False, "still red")
+
+        def fixer(path, why):
+            with open(os.path.join(path, "fixer_marker.py"), "w") as f:
+                f.write("# attempted fix\n")
+            return True
+
+        ok, why, notes = worktree._sync_and_verify(
+            repo, "run1", target_tip, always_red, fixer=fixer)
+        assert ok is False
+        assert notes["fixed"] is False
+        assert len(check_calls) == 2  # initial + post-fixer re-check
+
+        run_head_after = subprocess.run(
+            ["git", "-C", repo, "rev-parse", "run1"],
+            capture_output=True, text=True).stdout.strip()
+        assert run_head_after == run_head_before  # sync/fix commits stripped
 
 
 if __name__ == "__main__":

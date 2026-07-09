@@ -739,7 +739,8 @@ def _exec_kind(ctx, skey, kind, stepdef, state, flowing, histories, legal_target
     if kind == "prompt":
         if llm is None:
             raise ValueError("a `prompt` state needs an llm caller (load_workflow(..., llm=))")
-        caller = (lambda convo, _llm=llm: _llm(convo))
+        def caller(convo, _llm=llm):
+            return _llm(convo)
         return _do_model_step(ctx, skey, stepdef, "prompt", state, flowing, histories,
                               legal_targets, caller, "llm", intent, max_repair, max_intervene,
                               router or llm, registry=registry, default_context=default_context)
@@ -1115,4 +1116,3 @@ def _extract_json_object(raw):
                             break
         start = s.find("{", start + 1)
     return None
-

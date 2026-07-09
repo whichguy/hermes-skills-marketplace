@@ -66,6 +66,44 @@ Critical surfaces: merge landing & honesty, scout→build gating, CLI exit contr
 honesty, and the loop's completion gates. Routine shape/type guards rely on their direct unit
 test. See TESTING.md's "Invariant for changes" for the full breakdown.
 
+## Worktree tooling gotchas
+
+### `write_file` writes to the live tree, not the worktree
+
+**Cause:** The `write_file` tool resolves paths against the session's working directory
+(`/opt/data`), not the worktree root. When you `write_file(path="/opt/data/devloop-progress/tests/test_x.py", ...)`,
+it writes to the **live tree** at `/opt/data/skills/.../tests/test_x.py` — the worktree
+at `/opt/data/devloop-progress/` is a separate git checkout and won't see the file.
+
+**Symptoms:** `git add -A` from the worktree root doesn't include the file. Tests pass
+when run from the live tree but fail in the worktree. The file is missing from the commit.
+
+**Fix:** Always use `terminal` to write files into the worktree, or copy them after writing:
+```bash
+# Option A: write with terminal directly into the worktree
+cat > /opt/data/devloop-progress/tests/test_x.py << 'PY'
+...content...
+PY
+
+# Option B: write_file then copy
+cp /opt/data/skills/.../tests/test_x.py /opt/data/devloop-progress/tests/test_x.py
+```
+
+**Prevention:** Before committing from a worktree, verify all expected files are present:
+`git -C /opt/data/devloop-progress status --short`. If a file you wrote via `write_file`
+is missing, it went to the live tree.
+
+### Stash on live tree can lose worktree-only files
+
+**Cause:** When merging a worktree branch back to the live tree, uncommitted live-tree
+changes (from accidental `write_file` writes) must be stashed first. If the stash is
+popped after merge and the worktree commit introduced files that only existed in the
+worktree, those files may be lost — the stash doesn't know about them.
+
+**Fix:** Before stashing, copy any worktree-only files to a safe location. After merge
++ stash pop, verify the file list matches expectations. Better: avoid the problem
+entirely by never writing to the live tree during worktree development (see above).
+
 ## Token caps and timeouts
 
 Per project policy, token caps and per-call timeouts are sourced from the Hermes runtime config

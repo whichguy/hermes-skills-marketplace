@@ -48,14 +48,14 @@ except ImportError:
         @staticmethod
         def partial_ratio(a, b):
             return difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio() * 100
-    fuzz = _FuzzFallback()
+    fuzz = _FuzzFallback()  # type: ignore[assignment]
 
 
 # ──────────────────────────────────────────────────────────────────────
 # Info type taxonomy — the core classification system
 # ──────────────────────────────────────────────────────────────────────
 
-INFO_TYPES = {
+INFO_TYPES: dict[str, dict] = {
     "registration": {
         "aliases": [
             "registration", "national championships registration",
@@ -314,7 +314,7 @@ def classify_info_type(header_text: str, url: str) -> str | None:
             
             if header_lower:
                 best_match = None
-                best_score = 0
+                best_score: float = 0
                 for itype in candidates:
                     for alias in INFO_TYPES[itype]["aliases"]:
                         score = fuzz.partial_ratio(alias.lower(), header_lower)
@@ -331,7 +331,7 @@ def classify_info_type(header_text: str, url: str) -> str | None:
         return None
 
     best_match = None
-    best_score = 0
+    best_score = 0.0
     threshold = 60
 
     for info_type, config in INFO_TYPES.items():
@@ -380,16 +380,18 @@ def _find_section_containers(soup: BeautifulSoup) -> list[tuple[str, Tag]]:
 
         # Strategy 1: Walk up to find a common ancestor containing both H2 and a UL
         container = h2.parent
+        found_ul = False
         for _ in range(5):
             if container is None:
                 break
             uls = container.find_all("ul")
             if uls:
                 containers.append((h2_text, container))
+                found_ul = True
                 break
             container = container.parent
-        else:
-            # Strategy 2: Use next siblings
+        if not found_ul:
+            # Strategy 2: Use the H2's parent as the container (no UL found)
             containers.append((h2_text, h2.parent or h2))
 
     return containers
@@ -413,7 +415,7 @@ def _extract_links_from_element(el: Tag, h2_section: str, seen_urls: set) -> lis
             
             # Find links in this block
             for link in parent_li.find_all("a", href=True):
-                href = link.get("href", "")
+                href = str(link.get("href", ""))
                 if not href or href.startswith("#"):
                     continue
                 full_url = _resolve_url(href)
@@ -443,7 +445,7 @@ def _extract_links_from_element(el: Tag, h2_section: str, seen_urls: set) -> lis
     
     # Also find standalone links not under any H3 (inline paragraph links)
     for link in el.find_all("a", href=True):
-        href = link.get("href", "")
+        href = str(link.get("href", ""))
         if not href or href.startswith("#"):
             continue
         full_url = _resolve_url(href)
@@ -485,7 +487,7 @@ def _extract_links_from_element(el: Tag, h2_section: str, seen_urls: set) -> lis
 def _is_nav_link(url: str, link_text: str, h3_header: str) -> bool:
     """Filter out navigation/footer links that aren't event content."""
     nav_patterns = [
-        r"/coaching/", r"/weightlifting-101", r"/weightlifting-sports-performance",
+        r"/coaching", r"/weightlifting-101", r"/weightlifting-sports-performance",
         r"/elite-education", r"/youth-coach-fellowship", r"/free-courses",
         r"/online-education-courses", r"/clubs-resource-corner", r"/prior-year-event-schedules",
         r"/historical-results", r"/results$", r"/american-records",
@@ -519,7 +521,7 @@ def extract_all_links(soup: BeautifulSoup) -> list[dict]:
     3. Also catch standalone links (VWS1 inline style)
     """
     sections = []
-    seen_urls = set()
+    seen_urls: set[str] = set()
     
     containers = _find_section_containers(soup)
     
@@ -531,7 +533,7 @@ def extract_all_links(soup: BeautifulSoup) -> list[dict]:
     main = soup.find("main") or soup.find("body")
     if main:
         for link in main.find_all("a", href=True):
-            href = link.get("href", "")
+            href = str(link.get("href", ""))
             if not href or href.startswith("#"):
                 continue
             full_url = _resolve_url(href)
@@ -680,7 +682,7 @@ def extract_event_page(url: str, html: str | None = None) -> dict:
     overview = extract_event_title_and_overview(soup)
 
     # Group sections by info_type
-    by_type = {}
+    by_type: dict[str, list] = {}
     unclassified = []
     for s in sections:
         itype = s["info_type"]

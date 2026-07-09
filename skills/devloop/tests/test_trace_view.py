@@ -104,6 +104,64 @@ def test_chain_view_pivots_by_criterion():
         assert "does Y" in out and "(never ran)" in out         # NO criterion dropped
 
 
+def test_fmt_elapsed_formats_relative_timestamp():
+    # _fmt_elapsed is the helper that prefixes each rendered line with the time since t0.
+    # It must handle both valid timestamps and missing ones.
+    assert trace_view._fmt_elapsed({"ts": 105.5}, 100.0) == "+    5.5s "
+    assert trace_view._fmt_elapsed({"ts": 100.0}, 100.0) == "+    0.0s "
+    assert trace_view._fmt_elapsed({"ts": None}, 100.0) == ""
+    assert trace_view._fmt_elapsed({}, 100.0) == ""
+
+
+def test_render_empty_trace_is_empty_string():
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "trace.jsonl")
+        open(p, "w").write("")
+        assert trace_view.render(p) == ""
+
+
+def test_render_terminal_event_alone_shows_outcome():
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "trace.jsonl")
+        open(p, "w").write(json.dumps({"ts": 1.0, "step": "terminal", "terminal": "HUMAN_REVIEW", "reason": "ambiguous"}) + "\n")
+        out = trace_view.render(p)
+        assert "== HUMAN_REVIEW ==" in out
+        assert "ambiguous" in out
+
+
+def test_render_unknown_event_uses_compact_json_fallback():
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "trace.jsonl")
+        open(p, "w").write(json.dumps({"ts": 1.0, "step": "novel_event", "payload": "surprise"}) + "\n")
+        out = trace_view.render(p)
+        assert "novel_event" in out
+        assert "surprise" in out
+
+
+def test_chain_empty_dod_shows_unknown_terminal():
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "trace.jsonl")
+        open(p, "w").write(json.dumps({"step": "terminal", "terminal": "COMPLETE"}) + "\n")
+        out = trace_view.chain(p)
+        assert "TDD chain" in out
+        assert "terminal: COMPLETE" in out
+
+
+def test_chain_failed_evidence_shows_fail_in_chain():
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "trace.jsonl")
+        evs = [
+            {"step": "charter", "dod": [{"id": "c1", "criterion": "does X", "verify_intent": "X happens"}]},
+            {"step": "judge", "verdicts": [{"criterion": "c1", "encodes": True, "judge_a": True, "judge_b": True}]},
+            {"step": "evidence", "criterion": "c1", "exit": 1, "passed": False},
+            {"step": "terminal", "terminal": "INCOMPLETE"},
+        ]
+        open(p, "w").write("\n".join(json.dumps(e) for e in evs) + "\n")
+        out = trace_view.chain(p)
+        assert "evidence[0]: exit=1 [FAIL]" in out
+        assert "INCOMPLETE" in out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

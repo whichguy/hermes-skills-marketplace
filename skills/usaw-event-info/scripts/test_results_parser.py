@@ -19,8 +19,8 @@ Fixtures in tests/fixtures/pdfs/:
 """
 
 import sys
-import json
 from pathlib import Path
+
 
 # Add scripts dir to path for import
 sys.path.insert(0, str(Path(__file__).parent))
@@ -37,7 +37,10 @@ def _import_parser():
             parse_full_results,
             parse_best_lifters,
             parse_start_list,
+            parse_athlete_lines,
         )
+        # Make parse_athlete_lines available at module level for DNF tests
+        globals()["parse_athlete_lines"] = parse_athlete_lines
         return detect_pdf_type, parse_full_results, parse_best_lifters, parse_start_list
     except ImportError:
         return None
@@ -131,7 +134,7 @@ def test_parse_full_results_structure():
 
     pdf_path = FIXTURE_DIR / "2026-ncw-results.pdf"
     if not pdf_path.exists():
-        print(f"⏭️  test_parse_full_results_structure — fixture missing")
+        print("⏭️  test_parse_full_results_structure — fixture missing")
         return False
 
     import fitz
@@ -280,6 +283,155 @@ def test_detect_pdf_type_schedule():
 # Main
 # ──────────────────────────────────────────────────────────────────────
 
+def test_dnf_layout_1_all_dnf_one_line():
+    """DNF Layout 1: 'DNF DNF DNF' on a single line, followed by lot + name + team."""
+    _import_parser()  # Ensures parse_athlete_lines is in globals
+    lines = [
+        "Age Group SR M",
+        "Weight Category 89",
+        "Body", "QPoints", "T", "sn", "cj",
+        "Lot", "Name", "Team", "Wt.", "Age",
+        "DNF DNF DNF",   # all ranks DNF
+        "119",            # lot
+        "THIBAULT, McKenzie",  # name
+        "Heavenly Gains Barbell",  # team
+        "45.90",          # bodyweight
+        "18",             # age
+        "56", "56", "56", # snatch attempts
+        "69", "69", "69", # cj attempts
+        "DNF",            # total (DNF)
+        "DNF",            # score (DNF)
+        "Age Group SR M", # next section
+    ]
+    athlete, consumed = parse_athlete_lines(lines, 13, 119, "SR", "M", "89")  # noqa: F821
+    assert athlete is not None, "Expected athlete for DNF layout 1"
+    assert athlete["name"] == "THIBAULT, McKenzie", f"Wrong name: {athlete['name']}"
+    assert athlete["lot"] == 119
+    assert athlete["total"] == 125 or athlete["total"] == 0  # computed or DNF
+    print(f"✅ test_dnf_layout_1_all_dnf_one_line (consumed={consumed})")
+    return True
+
+
+def test_dnf_layout_2_all_dnf_three_lines():
+    """DNF Layout 2: Three consecutive 'DNF' lines (one per rank), then lot + name."""
+    _import_parser()
+    lines = [
+        "Age Group JR W",
+        "Weight Category 53",
+        "Body", "QPoints", "T", "sn", "cj",
+        "Lot", "Name", "Team", "Wt.", "Age",
+        "DNF",   # sn_rank DNF
+        "DNF",   # cj_rank DNF
+        "DNF",   # total_rank DNF
+        "9",     # lot
+        "DNF",   # attempt value (not a boundary — it's inside the athlete's data)
+        "303",   # attempt value
+        "LIVINGSTON, Ciara",  # name
+        "Maxx Effort Training",  # team
+        "50.30", # bodyweight
+        "18",    # age
+        "DNF", "DNF", "DNF",  # all snatch attempts DNF
+        "DNF", "DNF", "DNF",  # all cj attempts DNF
+        "DNF",   # total DNF
+        "Age Group JR W",  # next section
+    ]
+    # lot '9' is at index 13 (after 3 DNF lines at 10,11,12)
+    athlete, consumed = parse_athlete_lines(lines, 13, 9, "JR", "W", "53")  # noqa: F821
+    assert athlete is not None, "Expected athlete for DNF layout 2"
+    assert athlete["name"] == "LIVINGSTON, Ciara", f"Wrong name: {athlete['name']}"
+    assert athlete["lot"] == 9
+    assert athlete["total"] == 0, f"Expected total=0 for DNF, got {athlete['total']}"
+    print(f"✅ test_dnf_layout_2_all_dnf_three_lines (consumed={consumed})")
+    return True
+
+
+def test_dnf_layout_3_partial_dnf_one_rank():
+    """DNF Layout 3: Partial DNF — 2 ranks are DNF, 1 numeric rank remains."""
+    _import_parser()
+    lines = [
+        "Age Group JR W",
+        "Weight Category 48",
+        "Body", "QPoints", "T", "sn", "cj",
+        "Lot", "Name", "Team", "Wt.", "Age",
+        "DNF DNF",  # cj_rank + total_rank DNF
+        "7",        # snatch_rank (numeric)
+        "1240",     # lot
+        "ILANO, Lucy",  # name
+        "Orlando Strength",  # team
+        "51.55",    # bodyweight
+        "18",       # age
+        "50", "51", "51",  # snatch attempts
+        "65", "68", "70",  # cj attempts
+        "121",      # total
+        "Age Group JR W",  # next section
+    ]
+    # lot '1240' is at index 14 (after DNF DNF at 12, rank at 13)
+    athlete, consumed = parse_athlete_lines(lines, 14, 1240, "JR", "W", "48")  # noqa: F821
+    assert athlete is not None, "Expected athlete for DNF layout 3"
+    assert athlete["name"] == "ILANO, Lucy", f"Wrong name: {athlete['name']}"
+    assert athlete["lot"] == 1240
+    assert athlete["snatch_best"] == 51, f"Expected snatch_best=51, got {athlete.get('snatch_best')}"
+    assert athlete["cj_best"] == 70, f"Expected cj_best=70, got {athlete.get('cj_best')}"
+    print(f"✅ test_dnf_layout_3_partial_dnf_one_rank (consumed={consumed})")
+    return True
+
+
+def test_final_schedule_3_formats():
+    """Final schedule parser handles 3 session formats: full, condensed, WSO/ADAP.
+    
+    Uses the real 2026 NCW Final Schedule fixture. Asserts:
+    - Correct PDF type detection
+    - All 3 formats present (full with weight_cat, condensed without, WSO with no platform)
+    - No garbage sessions (platform name in weight_category)
+    - No sessions with invalid gender (full/condensed must have M or F)
+    """
+    _import_parser()
+    from usaw_results_parser import parse_pdf
+
+    result = parse_pdf(str(FIXTURE_DIR / "2026-ncw-final-schedule.pdf"))
+
+    assert result["pdf_type"] == "final_schedule", f"Expected final_schedule, got {result['pdf_type']}"
+
+    sessions = result["sessions"]
+    assert len(sessions) > 0, "Expected at least 1 session"
+
+    # Categorize
+    full = [s for s in sessions if s["platform"] and s["weight_category"]]
+    condensed = [s for s in sessions if s["platform"] and not s["weight_category"]]
+    wso = [s for s in sessions if not s["platform"]]
+
+    # All 3 formats must be present
+    assert len(full) > 0, "Expected at least 1 full-format session"
+    assert len(condensed) > 0, "Expected at least 1 condensed-format session"
+    assert len(wso) > 0, "Expected at least 1 WSO/ADAP session"
+
+    # No garbage: platform name in weight_category
+    PLATFORM_NAMES = {"WHITE", "BLUE", "RED", "GREEN", "YELLOW", "ORANGE"}
+    garbage = [s for s in sessions if s["weight_category"] in PLATFORM_NAMES]
+    assert len(garbage) == 0, f"Found {len(garbage)} garbage sessions (platform in weight_category)"
+    
+    # Full and condensed sessions must have valid gender
+    bad_gender = [s for s in sessions if s["platform"] and s["gender"] not in ("M", "F")]
+    assert len(bad_gender) == 0, f"Found {len(bad_gender)} sessions with invalid gender"
+    
+    # Full sessions must have entry_count > 0
+    bad_entries = [s for s in full if s["entry_count"] <= 0]
+    assert len(bad_entries) == 0, f"Found {len(bad_entries)} full sessions with entry_count <= 0"
+    
+    # WSO sessions must have age_group and weight_category
+    bad_wso = [s for s in wso if not s["age_group"] or not s["weight_category"]]
+    assert len(bad_wso) == 0, f"Found {len(bad_wso)} WSO sessions missing age_group or weight_category"
+    
+    # Spot-check known values from the fixture
+    first_full = full[0]
+    assert first_full["platform"] in PLATFORM_NAMES, f"Bad platform: {first_full['platform']}"
+    assert first_full["gender"] in ("M", "F"), f"Bad gender: {first_full['gender']}"
+    assert any(c in first_full["weight_category"] for c in "0123456789+BCD"), \
+        f"Bad weight_category: {first_full['weight_category']}"
+    
+    print(f"✅ test_final_schedule_3_formats ({len(sessions)} sessions: {len(full)} full, {len(condensed)} condensed, {len(wso)} WSO/ADAP)")
+
+
 ALL_TESTS = [
     test_detect_pdf_type_results,
     test_detect_pdf_type_best_lifters,
@@ -288,18 +440,20 @@ ALL_TESTS = [
     test_parse_full_results_structure,
     test_parse_best_lifters_structure,
     test_parse_start_list_structure,
+    test_dnf_layout_1_all_dnf_one_line,
+    test_dnf_layout_2_all_dnf_three_lines,
+    test_dnf_layout_3_partial_dnf_one_rank,
+    test_final_schedule_3_formats,
 ]
 
 
 def main():
-    verbose = "-v" in sys.argv or "--verbose" in sys.argv
 
     print("🧪 USAW Results Parser Test Suite (L6)")
     print(f"   {len(ALL_TESTS)} tests\n")
 
     passed = 0
     failed = 0
-    skipped = 0
 
     for test in ALL_TESTS:
         result = test()

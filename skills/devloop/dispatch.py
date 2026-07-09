@@ -33,6 +33,11 @@ DESIGNER = os.environ.get("DEVLOOP_DESIGNER", "deepseek-v4-pro:cloud")  # writes
 # Two DISTINCT assertion judges, both != coder and != designer (no model grades its own work).
 JUDGE_A = os.environ.get("DEVLOOP_JUDGE_A", "glm-5.2:cloud")
 JUDGE_B = os.environ.get("DEVLOOP_JUDGE_B", "minimax-m3:cloud")
+# TIEBREAKER (advisor review 2026-07-09): a third judge called ONLY when judge_a and judge_b
+# disagree on a criterion. Uses a different model from both judges and the coder/designer.
+# Default: deepseek-reasoner (the advisor's architect model — strong reasoning, different
+# provider from glm and minimax). Override with DEVLOOP_TIEBREAKER env var.
+TIEBREAKER = os.environ.get("DEVLOOP_TIEBREAKER", "deepseek-reasoner:cloud")
 # CODER runs per IMPLEMENT iteration (the bottleneck) -> a fast cloud model. All four of coder /
 # designer / judge_a / judge_b MUST differ (assert_distinct_models) so no model writes both the
 # tests and the code, or grades its own work. Roster: kimi (coder), deepseek (designer), glm +
@@ -1141,6 +1146,15 @@ def judge_via_ask(model, target_dir):
         reason = reasons[0] if reasons else ""
         return False, reason
     return judge
+
+
+def tiebreaker_via_ask(model=None, target_dir=None):
+    """Tiebreaker judge (advisor review 2026-07-09): called ONLY when judge_a and judge_b
+    disagree on a criterion. Same judge prompt as judge_via_ask (majority vote, fail-closed)
+    but uses the TIEBREAKER model (default: deepseek-reasoner — different provider from both
+    judge_a and judge_b). The tiebreaker function has the same signature as judge_via_ask so
+    it can be passed directly to judge_assertions(tiebreaker=...)."""
+    return judge_via_ask(model or TIEBREAKER, target_dir)
 
 
 def test_auditor_via_ask(model, target_dir):

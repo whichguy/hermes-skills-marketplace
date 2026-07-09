@@ -99,16 +99,33 @@ file operations — that's worth reviewing for wiki-worthy knowledge.
 ```yaml
 name: Session-to-wiki capture
 schedule: 0 7 * * *    # daily at 7AM UTC
-model: claude-sonnet-4-6  # Sonnet — requires judgment to decide what's wiki-worthy
+model: glm-5.2:cloud   # GLM-5.2 — requires judgment to decide what's wiki-worthy
 script: session_wiki_precheck.py
-skills: [llm-wiki, session-wiki-capture]
+skills: [note-taking/session-wiki-capture, research/llm-wiki]
 enabled_toolsets: [terminal, file, session_search, skills]
 deliver: origin
 ```
 
-**Why Sonnet, not Haiku?** The LLM must read session content and make judgment
+**Why GLM-5.2, not Haiku?** The LLM must read session content and make judgment
 calls: is this a one-off chat (SKIP), a fact to add to an existing page (NOTE),
 or a new entity/concept worth its own page (PAGE)? That's synthesis, not formatting.
+Originally designed for Sonnet; switched to GLM-5.2 as part of the full migration
+off Anthropic. Triage quality has been adequate (17 runs, 3 pages created, 15+
+pages updated). Monitor and switch back if triage quality degrades.
+The original design used Sonnet for judgment quality. As of 2026-07, GLM-5.2:cloud
+is the active model and producing adequate results. If triage quality degrades
+(missed pages, wrong SKIP decisions), switch back to Sonnet for a trial period.
+
+**Skills config:** The `skills` array MUST include `note-taking/session-wiki-capture`
+(not `ask`). The `ask` skill is a model-dispatch library — loading it here wastes
+~107KB of context per run. This is a common copy-paste error from other cron jobs
+(morning-brief, followup-sweep) that legitimately use `ask` for model dispatch.
+Double-check the skills array when creating or updating this cron job.
+
+**`enabled_toolsets`:** Restrict to `[terminal, file, session_search, skills]`.
+The agent doesn't need web, browser, delegation, or other toolsets — they add
+unnecessary token overhead. `session_search` is critical (without it the agent
+can't read session content).
 
 ## Cron Prompt Essentials
 
@@ -152,7 +169,7 @@ run this cleanup:
 ### Step 1: Run the lint script
 
 ```bash
-python3 ${HERMES_HOME}/scripts/wiki_lint.py
+python3 /opt/data/scripts/wiki_lint.py
 ```
 
 This surfaces: missing frontmatter, broken wikilinks, orphan pages, index
@@ -201,24 +218,69 @@ every time a Slack session contributes content.
 
 ## Pitfalls
 
-- **Don't capture every session** — the `tool_call_count > 3` filter is
-  essential. Without it, the precheck emits 20+ sessions per day and the LLM
-  burns tokens reviewing casual chats.
+- **Two-tier state model (fetched/triaged)** — the precheck uses a two-tier
+  state model to prevent silent data loss on LLM crash:
+  - `fetched`: sessions emitted by precheck (safe to skip re-querying DB)
+  - `triaged`: sessions the LLM has confirmed processing via merge file
+  - On LLM crash: sessions stay in `fetched` only → re-emitted next run
+  - Merge file: `$HERMES_HOME/cron/state/session_wiki_seen_new.json` — the LLM
+    writes processed session IDs here after each run. The precheck merges this
+    into `triaged` on the next run.
+  - Legacy `{"seen": [...]}` format auto-migrates (treats all as both fetched + triaged)
+  - This is the same pattern proven in the email-wiki-ingest pipeline.
+- **`message_count > 10` filter (cli/subagent only)** — the precheck SQL query
+  requires `message_count > 10` **only for `cli` and `subagent` sources**.
+  User-facing sessions (`slack`, `telegram`, `whatsapp`, `email`) are always
+  included when `tool_call_count > 3` — short but dense conversations (e.g. a
+  4-message Telegram exchange with 3 tool calls) are often wiki-worthy. The
+  message_count filter targets ephemeral subagent worker sessions (typically
+  5-8 messages: read spec, write file, verify) while preserving substantive
+  user conversations. Don't remove this without measuring the SKIP rate impact.
+- **Don't capture every session** — the `tool_call_count > 3` + `message_count > 10`
+  filters are essential. Without them, the precheck emits 20+ sessions per day
+  and the LLM burns tokens reviewing casual chats and ephemeral workers.
 - **Don't use `created_at`** — the column doesn't exist. Use `started_at` (REAL).
 - **Don't forget `session_search` in toolsets** — without it the LLM can't
   read session content and the job is useless.
 - **Dedup is critical** — without session_id dedup, the same sessions appear
   every day until the LLM processes them.
-- **Seen-state file format** — `cron/state/session_wiki_seen.json` is a dict
-  with a `"seen"` key containing a list of session IDs, NOT a flat list:
+- **Seen-state file format** — `cron/state/session_wiki_seen.json` now uses
+  two-tier format:
   ```json
-  {"seen": ["20260621_101623_7de2cdee", "20260622_041824_eeb4b5f8", ...]}
+  {"fetched": ["id1", "id2", ...], "triaged": ["id1", "id2", ...]}
   ```
-  When updating, read `data["seen"]`, append new IDs, prune to max 2000
-  (keep newest), and write back the full dict.
+  Legacy `{"seen": [...]}` format auto-migrates on first load (all IDs treated
+  as both fetched + triaged). The merge file `session_wiki_seen_new.json` is
+  written by the LLM after processing and merged into `triaged` on next run.
+  Prune to max 2000 per tier (keep newest).
+- **State-save-before-triage: silent data loss bug** — the precheck script
+  marks sessions as `seen` BEFORE the LLM processes them. If the LLM crashes
+  or the cron run fails, those sessions are permanently excluded from future
+  runs. The 48h lookback does NOT mitigate this — once a session ID is in
+  `seen`, it's filtered out on every subsequent run regardless of age. Fix:
+  apply the two-tier state model (`fetched` / `triaged`) from the
+  email-wiki-ingest pipeline. Precheck adds to `fetched` only; LLM confirms
+  processing by writing to a merge file; precheck merges into `triaged` on
+  next run. Sessions in `fetched` but not `triaged` get re-emitted. Legacy
+  `{"seen": [...]}` format auto-migrates on first load (treat all as both
+  fetched + triaged).
 - **Subagent sessions ARE included** — `source NOT IN ('cron', 'scheduler')`
   allows `subagent` source, which is correct — subagents often do focused work
   worth capturing.
+- **High SKIP rate is expected (~80-90%)** — most flagged sessions are subagent
+  workers doing ephemeral implementation work. This is normal and acceptable
+  given the low absolute volume (max 10 sessions/day). If token cost becomes a
+  concern, add `AND message_count > 10` to the SQL query to filter out short
+  worker sessions (read spec, write file, done — typically 5-8 messages). Do
+  NOT blanket-exclude `source = 'subagent'` or `source = 'cli'` — both can
+  produce wiki-worthy content.
+- **Wrong skill loaded: `ask` instead of `session-wiki-capture`** — a common
+  copy-paste error from other cron jobs (morning-brief, followup-sweep) that
+  legitimately use `ask` for model dispatch. Loading `ask` here wastes ~107KB
+  of context per run and the agent never sees the session-wiki-capture skill's
+  critical guidance (post-capture cleanup, Slack-session handling, log.md edit
+  corruption warnings). Always verify the cron job's `skills` array includes
+  `note-taking/session-wiki-capture` and does NOT include `ask`.
 - **Plan files are the source of truth for subagent sessions** — when
   multiple subagent sessions all execute the same implementation plan, read
   the plan file directly rather than reconstructing from session transcripts.
@@ -280,7 +342,7 @@ every time a Slack session contributes content.
   full cleanup (frontmatter, wikilinks, index, qmd) is most critical when
   NEW pages are created via `write_file`. When only editing existing pages
   (which already have proper frontmatter), a lighter pass — at minimum
-  running `python3 ${HERMES_HOME}/scripts/wiki_lint.py` — catches any stale
+  running `python3 /opt/data/scripts/wiki_lint.py` — catches any stale
   wikilinks or index drift introduced by the edits. Don't skip it entirely.
 - **Tool choice: `patch` for non-wiki files, `mcp__wiki__edit_file` for wiki files** —
   the `patch` tool works on any file in the filesystem and has fuzzy matching

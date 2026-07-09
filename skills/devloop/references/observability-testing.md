@@ -25,21 +25,55 @@ interfere with stdout JSON output. `DEVLOOP_PROGRESS` controls the level:
 [devloop] ✅ advisor: no blocking concerns
 ```
 
-**Loop-phase markers** (2026-07-05, expanded 2026-07-07), emitted from `loop.py`:
+**Loop-phase markers** (2026-07-05, expanded 2026-07-07 and 2026-07-08), emitted from `loop.py`.
+Every significant phase now shows a ⏳ start marker (with context about what it's doing) followed
+by a ✅/❌ completion marker (with the outcome). This start/completed pairing convention was
+added 2026-07-08 so the user can see when a long phase began and when it finished:
 
 ```
-[devloop] ⏳ charter
-[devloop] ✅ design
-[devloop] ✅ quality_lint
-[devloop] ✅ judge: 4/4 criteria trusted
-[devloop] ✅ judge (41s):   c1: ✓ trusted (judge_a:✓ judge_b:✓)
-[devloop] ✅ judge (41s):   c2: ✓ trusted (judge_a:✓ judge_b:✓)
-[devloop] ⏳ implement: coder attempt 0
-[devloop] ✅ evidence: 4/4 passed
-[devloop] ✅ stop_check: DoD-SATISFIED
-[devloop] ✅ regression: whole-suite
-[devloop] ✅ overfit_audit: 4 criteria x 2 auditors
-[devloop] ✅ complete: all gates passed
+[devloop] ⏳ charter (0s): decomposing request...
+[devloop] ⏳ ambiguity_gate (0s): passed
+[devloop] ⏳ design (0s ~120s): generating tests for 4 criteria...
+[devloop] ✅ design (0s): 4 test(s) rendered for 4 criteria
+[devloop] ✅ coverage (0s): 4 tests covering 4 criteria
+[devloop] ✅ quality_lint (0s): checking rendered tests
+[devloop] ⏳ judge (0s ~60s): judging 4 test(s) for 4 criteria...
+[devloop] ✅ judge (21s): 4/4 criteria trusted
+[devloop] ✅ lint_discovery (0s): discovered available linters
+[devloop] ⏳ implement (0s ~240s): coder attempt 0...
+[devloop] ✅ implement (34s): attempt 0, 2 file(s) changed
+[devloop] ⏳ lint (0s ~10s): checking 2 file(s), attempt 0
+[devloop] ✅ lint (0s): 3 checked, 0 skipped
+[devloop] ⏳ evidence (0s): running evidence for 4 criteria, attempt 0...
+[devloop] ✅ evidence (0s): attempt 0, 4/4 passed
+[devloop] ✅ stop_check (0s): DoD-SATISFIED
+[devloop] ⏳ regression (0s ~30s): running whole-suite regression...
+[devloop] ✅ regression (0s): whole-suite
+[devloop] ⏳ overfit_audit (0s): auditing 4 criteria x 2 auditors...
+[devloop] ✅ overfit_audit (92s): 4 criteria x 2 auditors
+[devloop] ⏳ commit_scope (0s): classifying changed files...
+[devloop] ✅ commit_scope (0s): all files are deliverable
+[devloop] ⏳ complete (0s): all gates passed, merging...
+```
+
+**Start/completed pairing convention** (2026-07-08): every phase that takes real time
+(judge, implement, evidence, regression, overfit_audit, commit_scope, complete) gets both
+a ⏳ start marker and a ✅/❌ completion marker. Instantaneous phases (charter, ambiguity_gate,
+lint_discovery, frozen_tests, replan, redesign) stay single-marker. The implement phase
+was the last to get a completion marker — it previously only had the start marker
+(`coder attempt N...`) with no completion.
+
+On failures, the new markers show what went wrong and the recovery path:
+```
+[devloop] ❌ lint: 2 checked, 0 skipped, 2 FAIL
+[devloop] ❌ rebuild: attempt 0 failed lint → rebuild 1
+[devloop] ❌ rebuild: attempt 0 failed regression → rebuild 2
+[devloop] ❌ rebuild: attempt 0 evidence failed (3/4) → rebuild 1
+[devloop] ❌ frozen_tests: violation detected, 1 file(s) restored
+[devloop] ❌ replan: replan 1 triggered
+[devloop] ✅ test_repair: oracle regenerated for ['c2']
+[devloop] ✅ test_repair: overfit audit regenerated tests for ['c1']
+[devloop] ✅ commit_scope: 2 file(s) dropped as scratch
 ```
 
 **Phase 2 detail** (2026-07-07): per-criterion judge verdicts with elapsed time,

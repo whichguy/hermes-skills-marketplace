@@ -26,7 +26,6 @@ import json
 import subprocess
 import sys
 import argparse
-from collections import defaultdict
 
 SCRIPT = "/opt/data/skills/sports/usaw-event-info/scripts/usaw_event_extractor.py"
 
@@ -319,7 +318,7 @@ def main():
     passed = 0
     failed = 0
 
-    print(f"🧪 USAW Event Extractor Test Suite")
+    print("🧪 USAW Event Extractor Test Suite")
     print(f"   {len(all_tests)} tests ({args.year})\n")
     
     for test in all_tests:

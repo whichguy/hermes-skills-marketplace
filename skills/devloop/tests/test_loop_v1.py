@@ -847,6 +847,77 @@ def test_v1_persists_inspection_bundle():
         assert notes and notes[-1]["gate"] == "evidence" and notes[-1]["ok"] is True
 
 
+# --- _do_implement: the engine's heart (P1 from advisor review) -----------------
+
+def test_do_implement_dict_result_extracts_fields():
+    """A real dispatcher returns a dict with exit_code, files_changed, changed_paths."""
+    with tempfile.TemporaryDirectory() as rd:
+        def fake_implement(charter, attempt, last_failure):
+            return {"exit_code": 0, "files_changed": 2,
+                    "summary": "created calc.py and test_calc.py",
+                    "changed_paths": ["calc.py", "test_calc.py"]}
+        ec, fc, paths = loop._do_implement(fake_implement, {"dod": [{"id": "c1"}]}, 0, None, rd)
+        assert ec == 0
+        assert fc == 2
+        assert paths == ["calc.py", "test_calc.py"]
+
+
+def test_do_implement_non_dict_result_returns_none():
+    """A legacy implement that returns None (not a dict) → ec=None, fc=None, paths=[]."""
+    with tempfile.TemporaryDirectory() as rd:
+        def legacy_implement(charter, attempt, last_failure):
+            return None
+        ec, fc, paths = loop._do_implement(legacy_implement, {"dod": [{"id": "c1"}]}, 0, None, rd)
+        assert ec is None
+        assert fc is None
+        assert paths == []
+
+
+def test_do_implement_non_dict_result_with_string():
+    """A legacy implement returning a string → ec=None, fc=None, summary=string."""
+    with tempfile.TemporaryDirectory() as rd:
+        def legacy_implement(charter, attempt, last_failure):
+            return "did some work"
+        ec, fc, paths = loop._do_implement(legacy_implement, {"dod": [{"id": "c1"}]}, 0, None, rd)
+        assert ec is None
+        assert fc is None
+        assert paths == []
+
+
+def test_do_implement_exit_code_nonzero():
+    """A failed implementation (exit_code=1) → ok=False in the progress marker."""
+    with tempfile.TemporaryDirectory() as rd:
+        def fail_implement(charter, attempt, last_failure):
+            return {"exit_code": 1, "files_changed": 0, "summary": "error",
+                    "changed_paths": []}
+        ec, fc, paths = loop._do_implement(fail_implement, {"dod": [{"id": "c1"}]}, 0, None, rd)
+        assert ec == 1
+        assert fc == 0
+        assert paths == []
+
+
+def test_do_implement_empty_dod():
+    """A charter with empty dod → still works, just no criteria count in the marker."""
+    with tempfile.TemporaryDirectory() as rd:
+        def fake_implement(charter, attempt, last_failure):
+            return {"exit_code": 0, "files_changed": 1, "summary": "ok",
+                    "changed_paths": ["a.py"]}
+        ec, fc, paths = loop._do_implement(fake_implement, {}, 0, None, rd)
+        assert ec == 0
+        assert fc == 1
+        assert paths == ["a.py"]
+
+
+def test_do_implement_no_changed_paths():
+    """A dict result with no changed_paths → paths defaults to []."""
+    with tempfile.TemporaryDirectory() as rd:
+        def no_paths_implement(charter, attempt, last_failure):
+            return {"exit_code": 0, "files_changed": 1, "summary": "ok"}
+        ec, fc, paths = loop._do_implement(no_paths_implement, {"dod": [{"id": "c1"}]}, 0, None, rd)
+        assert ec == 0
+        assert paths == []
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

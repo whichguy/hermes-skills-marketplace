@@ -114,9 +114,19 @@ def test_e2e_real_v1_multifile_completes():
     """Harder de-risk: a multi-FILE task with a cross-module dependency (filters.py must import and
     use mathutils.py). Stresses charter decomposition across files, the designer writing tests that
     span modules, and the coder creating two interdependent files — none of which the single-file
-    tasks exercise. Should COMPLETE; corroborated independently across BOTH modules."""
+    tasks exercise. Should COMPLETE; corroborated independently across BOTH modules.
+
+    QUARANTINED (advisor review 2026-07-09): this test fails ~50% due to judge non-determinism
+    (split votes on redesign, criterion trust flips). It is excluded from the CI gate to avoid
+    poisoning CI with a flaky signal. To run it explicitly:
+        DEVLOOP_RUN_REAL=1 DEVLOOP_RUN_MULTIFILE=1 python3 -m pytest tests/test_e2e_real.py::test_e2e_real_v1_multifile_completes -v -s
+    The diagnostic sprint (20-run logging + judge verdict taxonomy) will determine the fix —
+    see judge_verdicts.jsonl for per-judge verdict data once that logging is active."""
     if not _enabled():
         print("SKIP test_e2e_real_v1_multifile_completes (set DEVLOOP_RUN_REAL=1)")
+        return
+    if os.environ.get("DEVLOOP_RUN_MULTIFILE") != "1":
+        print("SKIP test_e2e_real_v1_multifile_completes (QUARANTINED — set DEVLOOP_RUN_MULTIFILE=1 to run)")
         return
     root = _e2e_dir("multifile")
     repo = os.path.join(root, "repo")

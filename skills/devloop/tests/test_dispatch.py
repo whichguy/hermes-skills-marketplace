@@ -1,6 +1,7 @@
 """Deterministic tests for dispatch.py's pure parts (no LLM): JSON extraction + Charter wrap."""
 import os
 import sys
+from unittest import mock
 
 _DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _DIR)
@@ -560,6 +561,75 @@ def test_snapshot_junk_only_attempt_counts_as_noop():
         after = dispatch._snapshot(d)
         assert dispatch._count_changed(before, after) == 0
         assert dispatch._changed_paths(before, after) == []
+
+
+# --- merge_resolver_via_ask: resolve function (P1 from advisor review) -----------
+
+def test_merge_resolver_via_ask_returns_callable():
+    """merge_resolver_via_ask returns a callable resolve function."""
+    resolver = dispatch.merge_resolver_via_ask(coder="test-model")
+    assert callable(resolver)
+
+
+def test_merge_resolver_resolve_success(tmp_path=None):
+    """resolve returns True when _chat returns exit code 0."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        resolver = dispatch.merge_resolver_via_ask(coder="test-model")
+        with mock.patch.object(dispatch, "_chat", return_value=("", 0)):
+            ok = resolver(d, ["file1.py", "file2.py"])
+            assert ok is True
+
+
+def test_merge_resolver_resolve_exit_none_is_success():
+    """resolve returns True when _chat returns exit code None (legacy/no exit)."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        resolver = dispatch.merge_resolver_via_ask(coder="test-model")
+        with mock.patch.object(dispatch, "_chat", return_value=("", None)):
+            ok = resolver(d, ["file1.py"])
+            assert ok is True
+
+
+def test_merge_resolver_resolve_exit_nonzero_is_failure():
+    """resolve returns False when _chat returns a non-zero exit code."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        resolver = dispatch.merge_resolver_via_ask(coder="test-model")
+        with mock.patch.object(dispatch, "_chat", return_value=("error", 1)):
+            ok = resolver(d, ["file1.py"])
+            assert ok is False
+
+
+def test_merge_resolver_prompt_includes_conflicted_files():
+    """The prompt sent to _chat includes the conflicted file names."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        resolver = dispatch.merge_resolver_via_ask(coder="test-model")
+        captured_prompt = []
+        def mock_chat(prompt, model, cwd=None, toolsets="", timeout=None, retries=None):
+            captured_prompt.append(prompt)
+            return ("", 0)
+        with mock.patch.object(dispatch, "_chat", side_effect=mock_chat):
+            resolver(d, ["conflicted_file.py", "other.py"])
+            assert len(captured_prompt) == 1
+            assert "conflicted_file.py" in captured_prompt[0]
+            assert "other.py" in captured_prompt[0]
+            assert "CONFLICT" in captured_prompt[0] or "conflict" in captured_prompt[0].lower()
+
+
+def test_merge_resolver_prompt_includes_workdir():
+    """The prompt sent to _chat includes the workdir path."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        resolver = dispatch.merge_resolver_via_ask(coder="test-model")
+        captured_prompt = []
+        def mock_chat(prompt, model, cwd=None, toolsets="", timeout=None, retries=None):
+            captured_prompt.append(prompt)
+            return ("", 0)
+        with mock.patch.object(dispatch, "_chat", side_effect=mock_chat):
+            resolver(d, ["file.py"])
+            assert d in captured_prompt[0]
 
 
 if __name__ == "__main__":

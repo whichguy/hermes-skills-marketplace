@@ -30,13 +30,12 @@ metadata:
 ## Overview
 
 **The product is a data file.** An LLM (or a human) writes a JSON/YAML **workflow spec** — a state
-machine of `run` / `prompt` / `agent` / `search` / `map` / `ask` / `flow` (nested child workflow)
-steps with `${...}`-interpolated
+machine of `run` / `prompt` / `search` / `map` / `ask` steps with `${...}`-interpolated
 prompts, routing, and declarative failure policy — and a small interpreter (`scripts/workflow.py`)
 compiles it onto a durable engine. The author writes **prompts + routing + a function registry,
 not control flow**; the engine provides durability, deterministic replay, suspend/resume, and
 human-in-the-loop for free. Model steps share ONE flow-wide conversation by default (the workflow
-is an agent in a single context; `context: "isolated"` — per step or spec-wide — is the lean
+has one conversational context; `context: "isolated"` — per step or spec-wide — is the lean
 opt-out), and state passes step to step automatically: each step's result flows to the next
 (`${in}`) and is stored under its name (`$.<step>`), readable from any later prompt.
 
@@ -44,8 +43,13 @@ A run lives in one directory (an append-only `journal.jsonl`). To resume — aft
 or a crash — the engine re-runs the workflow from the top, replaying journaled results instead of
 re-executing them. Completed steps never re-run; the call stack is never serialized.
 
-**Authoring guide (the spec grammar, kinds, interpolation, routing, failure policy):
-`references/workflow.md`. Read that first.**
+**Fast start:** read `README.md` first for what/where/why, examples, and the token-efficient
+LM reading routes. Then read the narrow reference for the task:
+
+- Driving or resuming a flow: `references/authoring-and-driving.md`.
+- Authoring a workflow spec: `references/workflow.md`.
+- Debugging failures: `references/driving-failures.md`.
+- Continuing this improvement work: `references/improvement-plan.md`.
 
 ## Design requirements & where they're proven
 
@@ -66,8 +70,8 @@ flow suspends, embedding the child's entire portable state) — see
 step's underlying function fires exactly once (`count_started("compute") == 1`) while the result
 stays identical across both runs.
 
-**2. Prompt by default — the authoring surface is prompt/agent steps, not imperative code.**
-`prompt` and `agent` are first-class kinds in `_KINDS`, dispatched through `_do_model_step`
+**2. Prompt by default — the authoring surface is prompt steps, not imperative code.**
+`prompt` is a first-class kind in `_KINDS`, dispatched through `_do_model_step`
 (`scripts/workflow.py`) — the v2 TASK/ROUTER split: the TASK call runs the author's directive as a
 PURE user message under an engine-owned system prefix (one auditable constants block: JSON-result
 rule, `ASK:` interrupt rule, the outcomes block) and replies with ONE discrete JSON object
@@ -91,7 +95,7 @@ engine (`${$.path}` global, `${in}` flowing — `references/workflow.md` §5). *
 escape, lone-ref type preservation) carried across an actual suspend/resume.
 
 **4. The LLM can interrupt for a user response, and the interrupted prompt is reentrant.**
-A `prompt`/`agent` step interrupts by replying with an `ASK:` first line (taught by the engine
+A `prompt` step interrupts by replying with an `ASK:` first line (taught by the engine
 prefix on every call; detected by `_as_decision_request`), and the ROUTER interrupts with a
 reasoned `ask` verdict when an output can't be clearly routed; both raise the same durable human
 gate via `ctx.ask`, which exits the process cleanly (exit 10) rather than blocking. **Why
@@ -175,17 +179,15 @@ Full contract (payload shapes, all exit codes, headless `--auto`, `--accept-flow
 
 Steps can handle their own failures instead of stopping the driver: `on_error` (an ordered
 matcher ladder on `run`/`search` — retry budgets, route-on-error, fallback results),
-`on_exhausted` (route when a `prompt`/`agent` exhausts its repair/intervene budget),
 `on_item_error` (per-item policy inside `map`), and `idempotent: false` (a crash mid-step
 escalates to in-doubt instead of risking a double-apply). Details: `references/workflow.md`.
 
-## The `agent` kind + live state (MCP)
+## Current gap: `agent` kind + live state (MCP)
 
-An `agent` step runs a full Hermes agent (`hermes -z`) that can read/write workflow state live
-via `scripts/state_mcp.py` (a zero-dep stdio MCP server exposing `get_state`/`set_state`);
-captured mutations are folded into the journaled result so replay never re-consults the agent.
-Register once: `hermes mcp add state --command python3 --args -- <abs>/state_mcp.py`. See
-`references/workflow.md` §11.
+Older design notes describe an `agent` step that runs a full Hermes agent (`hermes -z`) with live
+`get_state`/`set_state` tools. The current interpreter does **not** include `agent` in `_KINDS`, and
+the authoring eval marks its L6 MCP scenario as skipped until that support is restored. Treat
+`prompt` + `ASK:` as the current human-interruptible model surface.
 
 ## Substrate: the code-first engine
 

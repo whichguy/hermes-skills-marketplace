@@ -3,7 +3,7 @@
 The model authors only the spec; the harness owns the boilerplate. `write_flow` emits a small,
 self-contained `.py` that mirrors the `tests/ladder/wf_*.py` shape: `from workflow import load_workflow`,
 a FIXED registry of trivial run functions (the same names the cheatsheet advertises), and a
-`flow = load_workflow(SPEC, REGISTRY, agent=...)` the engine CLI loads.
+`flow = load_workflow(SPEC, REGISTRY, llm=..., router=...)` the engine CLI loads.
 
 `REGISTRY` here is the single source of truth for the run-fn NAMES: `authoring.author_spec` validates
 against it (membership only), the cheatsheet documents it, and `_REGISTRY_SRC` below is the literal
@@ -49,9 +49,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def write_flow(spec, dest_path):
-    """Write a runnable flow file for `spec` at `dest_path`. Both real-Hermes callers are always bound —
-    `llm=` (prompt kind) and `agent=` (agent kind) — because the authoring model chooses its own kinds;
-    binding is inert for kinds the spec doesn't use. Returns dest_path."""
+    """Write a runnable flow file for `spec` at `dest_path`. The real-Hermes LLM caller is bound for
+    prompt steps and routing; authoring instructions are kept to the current interpreter kinds."""
     # v2: declaration order is SEMANTIC (sequential fall-through) — json.loads preserved the
     # model's order; sorting here would silently rewire the graph. Never sort.
     spec_src = json.dumps(spec, indent=2)
@@ -60,10 +59,10 @@ def write_flow(spec, dest_path):
         "from workflow import load_workflow\n"
         "import sys\n"
         "sys.path.insert(0, %r)\n"
-        "from bridge import docker_agent_caller as _AGENT, docker_llm_caller as _LLM\n" % HERE
+        "from bridge import docker_llm_caller as _LLM\n" % HERE
         + "\n" + _REGISTRY_SRC
         + "\nSPEC = " + spec_src + "\n"
-        + "\nflow = load_workflow(SPEC, REGISTRY, llm=_LLM, agent=_AGENT, router=_LLM)\n"
+        + "\nflow = load_workflow(SPEC, REGISTRY, llm=_LLM, router=_LLM)\n"
     )
     with open(dest_path, "w", encoding="utf-8") as f:
         f.write(src)

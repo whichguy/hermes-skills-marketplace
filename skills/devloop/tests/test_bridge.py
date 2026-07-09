@@ -54,7 +54,7 @@ def test_run_defaults_to_scratch_and_none_is_scratch_alias():
     #   `if repo is SCRATCH or repo is None:` -> `if False:` (the SCRATCH sentinel leaks through)
     for passed in ("default", None, br.SCRATCH):
         scratched, seen = [], []
-        fake = lambda repo_, request, root_, name: (seen.append(repo_) or {
+        fake = lambda repo_, request, root_, name, **kw: (seen.append(repo_) or {
             "result": {"terminal": "HUMAN_REVIEW", "reason": "x"}, "worktree": {}, "charter": {}})
         orig_sr, orig_ws = br._scratch_repo, br._WRITE_SAFE
         with tempfile.TemporaryDirectory() as d:
@@ -71,7 +71,7 @@ def test_run_defaults_to_scratch_and_none_is_scratch_alias():
 
 def test_run_explicit_repo_used_verbatim_scratch_never_consulted():
     seen = []
-    fake = lambda repo_, request, root_, name: (seen.append(repo_) or {
+    fake = lambda repo_, request, root_, name, **kw: (seen.append(repo_) or {
         "result": {"terminal": "HUMAN_REVIEW", "reason": "x"}, "worktree": {}, "charter": {}})
     orig_sr, orig_ws = br._scratch_repo, br._WRITE_SAFE
 
@@ -108,7 +108,7 @@ def test_run_complete_commits_branch_removes_worktree_and_preserves_trace():
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "built.py"), "w").write("x = 1\n")
             rd = os.path.join(wt["path"], ".devloop", "runs", name)
@@ -162,7 +162,7 @@ def test_run_human_review_is_needs_input_not_error():
     # needs-input outcome with the blocking questions, NOT as an error string (the old shape).
     # Mutants killed: error tuple back to ("COMPLETE",) (HR reads as error);
     # needs_human -> False (the affordance flag vanishes).
-    fake = lambda repo, request, root, name: {
+    fake = lambda repo, request, root, name, **kw: {
         "result": {"terminal": "HUMAN_REVIEW", "reason": "blocking ambiguity: which datastore?"},
         "worktree": {"path": "/nope", "branch": "devloop/build-y", "repo": repo},
         "charter": {"open_questions": [{"text": "which datastore?", "blocking": True},
@@ -186,7 +186,7 @@ def test_run_human_review_is_needs_input_not_error():
 
 
 def test_run_no_termination_stays_error():
-    fake = lambda repo, request, root, name: {
+    fake = lambda repo, request, root, name, **kw: {
         "result": {"terminal": "NO_TERMINATION", "reason": "bug sentinel"},
         "worktree": {}, "charter": {}}
     orig_r, orig_ws = br._scratch_repo, br._WRITE_SAFE
@@ -255,7 +255,7 @@ def test_run_complete_merge_conflict_falls_back_to_branch_for_review():
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "c.py"), "w").write("v = 1\n")
             # conflicting advance on the TARGET after the fork
@@ -341,7 +341,7 @@ def test_failure_result_shape_matches_run_shape():
     # needs_human must be False — an engine CRASH is a failure (CLI exit 1), not a needs-input
     # outcome (exit 2). Mutant killed: `"needs_human": False` -> True (crash masquerades as
     # needs-input at the shell boundary).
-    fake = lambda repo_, request, root_, name: {
+    fake = lambda repo_, request, root_, name, **kw: {
         "result": {"terminal": "HUMAN_REVIEW", "reason": "x"}, "worktree": {}, "charter": {}}
     orig_sr, orig_ws = br._scratch_repo, br._WRITE_SAFE
     br._scratch_repo = lambda name: "/fake/repo"
@@ -503,7 +503,7 @@ def test_run_complete_keep_branch_skips_merge_keeps_branch():
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "c.py"), "w").write("v = 1\n")
             return {"result": {"terminal": "COMPLETE", "reason": "DoD-SATISFIED", "trace_path": None},
@@ -536,7 +536,7 @@ def test_run_complete_refuses_merge_when_target_switched_branches_mid_run():
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "c.py"), "w").write("v = 1\n")
             _git(repo_, "checkout", "-qb", "hotfix")        # user switches branches mid-run
@@ -561,7 +561,7 @@ def test_run_persists_schema_diagnostic_event_stream():
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "built.py"), "w").write("x = 1\n")
             return {"result": {"terminal": "COMPLETE", "reason": "DoD-SATISFIED",
@@ -590,7 +590,7 @@ def _run_refused_merge_with_debug(debug):
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "c.py"), "w").write("v = 1\n")
             _git(repo_, "checkout", "-qb", "hotfix")
@@ -803,7 +803,7 @@ def test_rich_journaling_reorder_commit_msg_built_before_append():
     with tempfile.TemporaryDirectory() as d:
         repo = _mk_repo(d)
 
-        def fake(repo_, request, root_, name):
+        def fake(repo_, request, root_, name, **kw):
             wt = wtmod.create_worktree(repo_, name, root_)
             open(os.path.join(wt["path"], "built.py"), "w").write("x = 1\n")
             rd = os.path.join(wt["path"], ".devloop", "runs", name)

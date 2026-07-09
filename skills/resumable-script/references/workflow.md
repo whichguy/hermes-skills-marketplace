@@ -1,5 +1,11 @@
 # Authoring workflows
 
+> Current-contract note: this reference still contains historical/planned material for features that
+> the active interpreter currently rejects, including `agent`, `flow`, `namespace`, spec-level
+> `max_visits`, and `on_exhausted`. The executable contract today is the code plus `tests/run.py`,
+> `tests/suites.py`, and the live authoring eval L1-L5. Treat those tests as authoritative until this
+> reference is fully reconciled.
+
 A workflow is a small JSON state machine — a **directed graph, cycles welcome** — run durably on the
 resumable-script engine. Authors (human or LLM) write *prompts + edges + a function registry*; the
 engine owns control flow, model contracts, routing judgments, interruption, and resume.

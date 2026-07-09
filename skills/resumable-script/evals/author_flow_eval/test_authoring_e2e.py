@@ -8,6 +8,8 @@ import pytest
 
 from scenarios import SCENARIOS
 from driver import run_scenario
+from workflow import _KINDS
+import env_setup
 
 
 def _cases():
@@ -21,4 +23,11 @@ def _cases():
 def test_authoring_e2e(scenario, live_env):
     """Real LLM authors the spec → engine runs it → suspends at a human gate → a real LLM answers as
     the human → the flow reaches the expected terminal. All assertions live inside run_scenario."""
+    missing = [k for k in scenario.get("requires_kinds", []) if k not in _KINDS]
+    if missing:
+        pytest.skip("scenario requires unsupported workflow kind(s): %s" % ", ".join(missing))
+    if scenario.get("needs_state_mcp"):
+        reason = env_setup.ensure_state_mcp(live_env["container"])
+        if reason:
+            pytest.skip(reason)
     run_scenario(scenario, live_env)

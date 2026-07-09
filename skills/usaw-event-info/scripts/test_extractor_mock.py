@@ -16,7 +16,6 @@ Fixtures stored in tests/fixtures/{slug}.html.
 """
 
 import argparse
-import json
 import sys
 from pathlib import Path
 
@@ -323,7 +322,7 @@ def main():
     passed = 0
     failed = 0
 
-    print(f"🧪 USAW Event Extractor Mock Test Suite (offline)")
+    print("🧪 USAW Event Extractor Mock Test Suite (offline)")
     print(f"   {len(all_tests)} tests ({args.year})\n")
 
     for test in all_tests:
@@ -334,7 +333,7 @@ def main():
 
         if not fixture_path.exists():
             print(f"⏭️  {name} — fixture missing ({fixture_path.name})")
-            print(f"    Run with --refresh to fetch fixtures")
+            print("    Run with --refresh to fetch fixtures")
             failed += 1
             continue
 

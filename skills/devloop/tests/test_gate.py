@@ -212,6 +212,232 @@ def test_regression_gate_fail_closed_on_missing_or_shapeless_evidence():
     assert not ok2
 
 
+# --- Tests for _judges_ok, untrusted_criteria, backoff_exhausted ---
+
+def test_judges_ok_all_trusted():
+    """_judges_ok returns True when every criterion has a trusted test."""
+    verdicts = [
+        {"criterion_id": "c1", "encodes": True, "escalate": False},
+        {"criterion_id": "c2", "encodes": True, "escalate": False},
+    ]
+    ok, _ = gate._judges_ok(["c1", "c2"], verdicts)
+    assert ok
+
+
+def test_judges_ok_missing_criterion():
+    """_judges_ok fails when a criterion has no verdict at all."""
+    verdicts = [{"criterion_id": "c1", "encodes": True, "escalate": False}]
+    ok, reason = gate._judges_ok(["c1", "c2"], verdicts)
+    assert not ok
+    assert "c2" in reason
+
+
+def test_judges_ok_no_trusted_test():
+    """_judges_ok fails when a criterion has verdicts but none are trusted."""
+    verdicts = [{"criterion_id": "c1", "encodes": False, "escalate": False}]
+    ok, reason = gate._judges_ok(["c1"], verdicts)
+    assert not ok
+    assert "trusted" in reason
+
+
+def test_judges_ok_escalate_blocks_trust():
+    """A test with encodes=True but escalate=True is NOT trusted."""
+    verdicts = [{"criterion_id": "c1", "encodes": True, "escalate": True}]
+    ok, _ = gate._judges_ok(["c1"], verdicts)
+    assert not ok
+
+
+def test_judges_ok_extra_tests_dont_hurt():
+    """Extra untrusted tests don't hurt if at least one is trusted."""
+    verdicts = [
+        {"criterion_id": "c1", "encodes": True, "escalate": False},
+        {"criterion_id": "c1", "encodes": False, "escalate": True},
+    ]
+    ok, _ = gate._judges_ok(["c1"], verdicts)
+    assert ok
+
+
+def test_untrusted_criteria_finds_untrusted():
+    """untrusted_criteria returns IDs of criteria with no trusted test."""
+    charter = {"dod": [
+        {"id": "c1", "criterion": "x", "verify_intent": "y", "kind": "shown"},
+        {"id": "c2", "criterion": "z", "verify_intent": "w", "kind": "shown"},
+    ]}
+    verdicts = [
+        {"criterion_id": "c1", "encodes": True, "escalate": False},
+        {"criterion_id": "c2", "encodes": False, "escalate": False},
+    ]
+    untrusted = gate.untrusted_criteria(charter, verdicts)
+    assert untrusted == ["c2"]
+
+
+def test_untrusted_criteria_empty_when_all_trusted():
+    """untrusted_criteria returns empty list when all criteria are trusted."""
+    charter = {"dod": [
+        {"id": "c1", "criterion": "x", "verify_intent": "y", "kind": "shown"},
+    ]}
+    verdicts = [{"criterion_id": "c1", "encodes": True, "escalate": False}]
+    assert gate.untrusted_criteria(charter, verdicts) == []
+
+
+def test_backoff_exhausted_continue():
+    """backoff_exhausted returns CONTINUE when under all limits."""
+    s = {"rebuild_count": 1, "replan_count": 0}
+    action, _ = gate.backoff_exhausted(s)
+    assert action == "CONTINUE"
+
+
+def test_backoff_exhausted_replan_after_rebuilds():
+    """backoff_exhausted returns REPLAN after too many rebuilds."""
+    s = {"rebuild_count": 5, "replan_count": 0}
+    action, _ = gate.backoff_exhausted(s)
+    assert action == "REPLAN"
+
+
+def test_backoff_exhausted_human_review_after_replans():
+    """backoff_exhausted returns HUMAN_REVIEW after too many replans."""
+    s = {"rebuild_count": 0, "replan_count": 10}
+    action, _ = gate.backoff_exhausted(s)
+    assert action == "HUMAN_REVIEW"
+
+
+# --- audit_tests: judged mid-run test repair (P1 from advisor review) ----------
+
+def test_audit_tests_no_evidence_skipped():
+    """Criteria with no evidence are never audited."""
+    charter = _charter()
+    wrong, details = gate.audit_tests(charter, {}, {"c1": ["test_c1"]}, lambda *a: True, lambda *a: True)
+    assert wrong == []
+    assert details == []
+
+
+def test_audit_tests_green_evidence_skipped():
+    """Criteria with passing (green) evidence are never audited — working oracles."""
+    from evidence import Evidence
+    charter = _charter()
+    ev = Evidence(criterion_id="c1", cmd=("python3", "-m", "pytest"), exit_code=0, passed=True)
+    wrong, details = gate.audit_tests(charter, {"c1": ev}, {"c1": ["test_c1"]},
+                                      lambda *a: True, lambda *a: True)
+    assert wrong == []
+    assert details == []
+
+
+def test_audit_tests_unanimous_indictment_flags_wrong():
+    """Both auditors say the test is wrong → flagged."""
+    from evidence import Evidence
+    charter = _charter()
+    ev = Evidence(criterion_id="c1", cmd=("python3",), exit_code=1, passed=False, stderr_tail="assertion failed")
+    wrong, details = gate.audit_tests(charter, {"c1": ev}, {"c1": ["test_c1"]},
+                                      lambda *a: True, lambda *a: True)
+    assert wrong == ["c1"]
+    assert len(details) == 1
+    assert details[0]["wrong"] is True
+
+
+def test_audit_tests_dissent_does_not_flag():
+    """Split vote (one True, one False) → NOT flagged (fail-closed toward oracle)."""
+    from evidence import Evidence
+    charter = _charter()
+    ev = Evidence(criterion_id="c1", cmd=("python3",), exit_code=1, passed=False, stderr_tail="error")
+    wrong, details = gate.audit_tests(charter, {"c1": ev}, {"c1": ["test_c1"]},
+                                      lambda *a: True, lambda *a: False)
+    assert wrong == []
+    assert details[0]["wrong"] is False
+
+
+def test_audit_tests_crashed_auditor_does_not_flag():
+    """A crashed auditor returns False (never indicts) — fail-closed."""
+    from evidence import Evidence
+    charter = _charter()
+    ev = Evidence(criterion_id="c1", cmd=("python3",), exit_code=1, passed=False, stderr_tail="error")
+    def crash(*a):
+        raise RuntimeError("API down")
+    wrong, details = gate.audit_tests(charter, {"c1": ev}, {"c1": ["test_c1"]},
+                                      crash, lambda *a: True)
+    assert wrong == []
+    assert details[0]["wrong"] is False
+    assert details[0]["audit_a"] is False
+
+
+def test_audit_tests_multiple_criteria_only_red_audited():
+    """Multiple criteria: only RED ones get audited."""
+    from evidence import Evidence
+    charter = _charter()
+    charter["dod"].append({"id": "c2", "criterion": "returns 404", "verify_intent": "status==404", "kind": "shown"})
+    ev1 = Evidence(criterion_id="c1", cmd=("python3",), exit_code=0, passed=True)
+    ev2 = Evidence(criterion_id="c2", cmd=("python3",), exit_code=1, passed=False, stderr_tail="err")
+    wrong, details = gate.audit_tests(charter, {"c1": ev1, "c2": ev2},
+                                      {"c1": ["t1"], "c2": ["t2"]},
+                                      lambda *a: True, lambda *a: True)
+    assert wrong == ["c2"]
+    assert len(details) == 1
+    assert details[0]["criterion_id"] == "c2"
+
+
+# --- stop_condition: additional edge cases (P1 from advisor review) -------------
+
+def test_stop_condition_empty_dod():
+    """Empty DoD → not complete, with reason."""
+    ok, reason = gate.stop_condition({}, {}, True, [])
+    assert ok is False
+    assert "no DoD" in reason
+
+
+def test_stop_condition_missing_id():
+    """A criterion without an id → fail-closed."""
+    charter = {"dod": [{"criterion": "x", "verify_intent": "y", "kind": "shown"}]}
+    ok, reason = gate.stop_condition(charter, {}, True, [])
+    assert ok is False
+    assert "no id" in reason
+
+
+def test_stop_condition_coverage_fails():
+    """Coverage check failed → not complete."""
+    charter = _charter()
+    ok, reason = gate.stop_condition(charter, {}, False, [])
+    assert ok is False
+    assert "coverage" in reason.lower()
+
+
+def test_stop_condition_judges_not_trusted():
+    """Judge verdicts not trusted → not complete."""
+    charter = _charter()
+    verdicts = [{"criterion_id": "c1", "encodes": False, "escalate": False,
+                 "judge_a": False, "judge_b": True, "judge_a_reason": "bad", "judge_b_reason": ""}]
+    ok, reason = gate.stop_condition(charter, {}, True, verdicts)
+    assert ok is False
+    assert "trusted" in reason.lower() or "c1" in reason
+
+
+def test_stop_condition_all_passing():
+    """All conditions met → complete."""
+    from evidence import Evidence
+    charter = _charter()
+    ev = Evidence(criterion_id="c1", cmd=("python3",), exit_code=0, passed=True)
+    verdicts = [{"criterion_id": "c1", "encodes": True, "escalate": False,
+                 "judge_a": True, "judge_b": True, "judge_a_reason": "", "judge_b_reason": ""}]
+    ok, reason = gate.stop_condition(charter, {"c1": ev}, True, verdicts)
+    assert ok is True
+    assert "DoD-SATISFIED" in reason
+
+
+def test_stop_condition_evidence_missing_for_one():
+    """One criterion missing evidence → not complete, names the unmet criterion."""
+    charter = _charter()
+    charter["dod"].append({"id": "c2", "criterion": "x", "verify_intent": "y", "kind": "shown"})
+    verdicts = [
+        {"criterion_id": "c1", "encodes": True, "escalate": False,
+         "judge_a": True, "judge_b": True, "judge_a_reason": "", "judge_b_reason": ""},
+        {"criterion_id": "c2", "encodes": True, "escalate": False,
+         "judge_a": True, "judge_b": True, "judge_a_reason": "", "judge_b_reason": ""},
+    ]
+    from evidence import Evidence
+    ev1 = Evidence(criterion_id="c1", cmd=("python3",), exit_code=0, passed=True)
+    ok, reason = gate.stop_condition(charter, {"c1": ev1}, True, verdicts)
+    assert ok is False
+    assert "c2" in reason
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for fn in fns:

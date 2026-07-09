@@ -10,6 +10,8 @@ import os
 import sys
 import tempfile
 
+import pytest
+
 _DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _DIR)
 
@@ -334,6 +336,217 @@ def test_progress_roadmap_emitted():
         events = _progress_events(run_dir)
         first_steps = [e["step"] for e in events[:3]]
         assert "roadmap" in first_steps, f"roadmap should be early: {first_steps}"
+
+
+# ── Stage 5: progress.jsonl integrity on all terminal paths ────────────────
+
+def test_progress_jsonl_dispatch_error_has_terminal():
+    """progress.jsonl has a terminal event even when the coder dispatch errors."""
+    with tempfile.TemporaryDirectory() as d:
+        run_dir = os.path.join(d, ".devloop", "runs", "de1")
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+
+        res = loop.run_v1(_charter(), design=_DESIGN,
+                         implement=lambda c, a, lf: {"exit_code": 1, "files_changed": 0, "summary": "crash"},
+                         judge_a=_YES, judge_b=_YES,
+                         verify_cmd_for=lambda cid: ["false"], run_dir=run_dir, cwd=d)
+        assert res["terminal"] == "HUMAN_REVIEW"
+        events = _progress_events(run_dir)
+        assert len(events) > 0, "progress.jsonl should exist even on dispatch error"
+        # The last event should be terminal-related (terminal or dispatch_error)
+        last_steps = [e["step"] for e in events[-3:]]
+        assert "terminal" in last_steps or "dispatch_error" in last_steps, \
+            f"dispatch error should have a terminal/dispatch_error event: {last_steps}"
+
+
+def test_progress_jsonl_no_termination_has_terminal():
+    """progress.jsonl has a terminal event even on NO_TERMINATION (bug sentinel)."""
+    with tempfile.TemporaryDirectory() as d:
+        script = os.path.join(d, "m.py")
+        run_dir = os.path.join(d, ".devloop", "runs", "nt1")
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+
+        # Always-fail implementer with max_passes=1 to force NO_TERMINATION
+        def implement(charter, attempt, last_failure):
+            open(script, "w").write("import sys; sys.exit(1)\n")
+
+        res = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                         judge_a=_YES, judge_b=_YES,
+                         verify_cmd_for=lambda cid: [sys.executable, script],
+                         run_dir=run_dir, cwd=d, max_passes=1,
+                         regression_cmd=_GREEN_SUITE)
+        assert res["terminal"] == "NO_TERMINATION"
+        events = _progress_events(run_dir)
+        assert len(events) > 0, "progress.jsonl should exist even on NO_TERMINATION"
+        terminal_events = [e for e in events if e["step"] == "terminal"]
+        assert len(terminal_events) >= 1, "NO_TERMINATION should still emit terminal event"
+
+
+def test_progress_jsonl_all_events_valid_json():
+    """Every line in progress.jsonl is valid JSON — no corruption from crash paths."""
+    with tempfile.TemporaryDirectory() as d:
+        script = os.path.join(d, "m.py")
+        run_dir = os.path.join(d, ".devloop", "runs", "json1")
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+
+        def implement(charter, attempt, last_failure):
+            open(script, "w").write("import sys; sys.exit(0)\n")
+
+        res = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                         judge_a=_YES, judge_b=_YES,
+                         verify_cmd_for=lambda cid: [sys.executable, script],
+                         run_dir=run_dir, cwd=d, regression_cmd=_GREEN_SUITE)
+        assert res["terminal"] == "COMPLETE"
+        progress_path = os.path.join(run_dir, "progress.jsonl")
+        assert os.path.exists(progress_path)
+        # Every line must parse as valid JSON
+        with open(progress_path) as f:
+            for i, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    json.loads(line)
+                except json.JSONDecodeError as e:
+                    pytest.fail(f"progress.jsonl line {i} is invalid JSON: {e}: {line[:100]}")
+
+
+# ── Stage 6: sequential runs don't leak or corrupt progress files ──────────
+
+def test_progress_jsonl_sequential_runs_are_independent():
+    """Two sequential runs produce separate progress.jsonl files with no cross-contamination."""
+    with tempfile.TemporaryDirectory() as d:
+        script = os.path.join(d, "m.py")
+        run_dir1 = os.path.join(d, ".devloop", "runs", "seq1")
+        run_dir2 = os.path.join(d, ".devloop", "runs", "seq2")
+
+        def implement(charter, attempt, last_failure):
+            open(script, "w").write("import sys; sys.exit(0)\n")
+
+        # Run 1
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+        res1 = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                          judge_a=_YES, judge_b=_YES,
+                          verify_cmd_for=lambda cid: [sys.executable, script],
+                          run_dir=run_dir1, cwd=d, regression_cmd=_GREEN_SUITE)
+        assert res1["terminal"] == "COMPLETE"
+        events1 = _progress_events(run_dir1)
+
+        # Run 2 (different run_dir — should not see run 1's events)
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+        res2 = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                          judge_a=_YES, judge_b=_YES,
+                          verify_cmd_for=lambda cid: [sys.executable, script],
+                          run_dir=run_dir2, cwd=d, regression_cmd=_GREEN_SUITE)
+        assert res2["terminal"] == "COMPLETE"
+        events2 = _progress_events(run_dir2)
+
+        # Both should have events
+        assert len(events1) > 0, "run 1 should have progress events"
+        assert len(events2) > 0, "run 2 should have progress events"
+        # Run 2's first event should NOT be from run 1
+        assert events2[0]["step"] == events1[0]["step"], \
+            "both runs should start with the same first step"
+        # Timestamps should be different (run 2 after run 1)
+        assert events2[0]["ts"] >= events1[0]["ts"], \
+            "run 2 should start after run 1"
+        # Run 1's file should not have grown from run 2
+        events1_after = _progress_events(run_dir1)
+        assert len(events1_after) == len(events1), \
+            "run 1's progress.jsonl should not change after run 2"
+
+
+def test_progress_jsonl_does_not_leak_across_runs():
+    """_PROGRESS_RUN_DIR is reset between runs — no stale run_dir references."""
+    with tempfile.TemporaryDirectory() as d:
+        script = os.path.join(d, "m.py")
+        run_dir = os.path.join(d, ".devloop", "runs", "leak1")
+
+        def implement(charter, attempt, last_failure):
+            open(script, "w").write("import sys; sys.exit(0)\n")
+
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = "some/stale/path"
+        res = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                         judge_a=_YES, judge_b=_YES,
+                         verify_cmd_for=lambda cid: [sys.executable, script],
+                         run_dir=run_dir, cwd=d, regression_cmd=_GREEN_SUITE)
+        assert res["terminal"] == "COMPLETE"
+        # The stale _PROGRESS_RUN_DIR should have been overwritten by run_v1
+        events = _progress_events(run_dir)
+        assert len(events) > 0, "progress should go to the correct run_dir, not a stale one"
+
+
+# ── Stage 7: roadmap coverage — every roadmap phase has a progress marker ─
+
+def test_progress_covers_all_roadmap_phases_on_complete():
+    """Every phase in _progress_roadmap() must emit at least one progress.jsonl event
+    during a COMPLETE run. Prevents silent phases from regressing (9 were missing
+    before 2026-07-08). Phases that only appear on failure paths (rebuild, replan,
+    frozen_tests, test_repair) are excluded — they're covered by failure-specific tests.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        script = os.path.join(d, "m.py")
+        run_dir = os.path.join(d, ".devloop", "runs", "roadmap1")
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+
+        def implement(charter, attempt, last_failure):
+            open(script, "w").write("import sys; sys.exit(0)\n")
+
+        res = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                         judge_a=_YES, judge_b=_YES,
+                         verify_cmd_for=lambda cid: [sys.executable, script],
+                         run_dir=run_dir, cwd=d, regression_cmd=_GREEN_SUITE)
+        assert res["terminal"] == "COMPLETE"
+        events = _progress_events(run_dir)
+        emitted_steps = {e["step"] for e in events}
+
+        # Phases that MUST appear on every COMPLETE run (from the roadmap)
+        required = {
+            "roadmap", "charter", "ambiguity_gate", "design", "coverage",
+            "quality_lint", "judge", "implement", "evidence",
+            "stop_check", "regression", "complete",
+        }
+        # Phases that appear only on the happy path if conditions are met
+        # (overfit_audit runs only on first would-be-COMPLETE with auditors wired;
+        #  commit_scope runs only with a scope_audit wired;
+        #  lint_discovery always runs after frozen_tests)
+        conditional = {"overfit_audit", "commit_scope", "lint_discovery", "lint"}
+
+        missing = required - emitted_steps
+        assert not missing, \
+            f"Complete run missing progress markers for: {sorted(missing)}.\n" \
+            f"Emitted steps: {sorted(emitted_steps)}"
+
+
+def test_progress_has_lint_marker_on_lint_gate():
+    """The lint gate emits a progress marker when checking files (not skipped).
+    The implementer must return changed_paths so the lint gate runs."""
+    with tempfile.TemporaryDirectory() as d:
+        script = os.path.join(d, "m.py")
+        run_dir = os.path.join(d, ".devloop", "runs", "lint1")
+        loop._PROGRESS_START = None
+        loop._PROGRESS_RUN_DIR = None
+
+        def implement(charter, attempt, last_failure):
+            open(script, "w").write("import sys; sys.exit(0)\n")
+            return {"exit_code": 0, "files_changed": 1, "changed_paths": [script]}
+
+        res = loop.run_v1(_charter(), design=_DESIGN, implement=implement,
+                         judge_a=_YES, judge_b=_YES,
+                         verify_cmd_for=lambda cid: [sys.executable, script],
+                         run_dir=run_dir, cwd=d, regression_cmd=_GREEN_SUITE)
+        assert res["terminal"] == "COMPLETE"
+        events = _progress_events(run_dir)
+        lint_events = [e for e in events if e["step"] == "lint"]
+        assert len(lint_events) >= 1, \
+            f"lint gate should emit progress marker; got steps: {sorted(e['step'] for e in events)}"
 
 
 if __name__ == "__main__":

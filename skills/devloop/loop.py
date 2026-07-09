@@ -27,6 +27,8 @@ import json
 import os
 import sys
 import time
+import traceback
+import uuid
 from pathlib import Path
 
 import config
@@ -46,11 +48,15 @@ _SNAPSHOT_SKIP_DIRS = {".devloop", ".git", "__pycache__", ".pytest_cache", ".ruf
 # Progress stream state: reset per run in run_v1 for accurate elapsed timing.
 _PROGRESS_START: float | None = None
 _PROGRESS_RUN_DIR: str | None = None  # set by run_v1 so _progress_event can write progress.jsonl
+_PROGRESS_RUN_ID: str | None = None   # short correlation ID for this run (e.g. "a3f1")
 _TYPICAL_PHASE_S = {
     "judge": 60,
     "implement": 240,
     "overfit_audit": 360,
     "commit_scope": 30,
+    "lint": 10,
+    "design": 120,
+    "regression": 30,
 }
 
 # ── Progress levels ────────────────────────────────────────────────────────
@@ -88,9 +94,10 @@ def _progress_event(run_dir, step, **data):
     run_dir: the run directory (progress.jsonl lives alongside trace.jsonl).
     step:   the phase name (charter, design, judge, evidence, terminal, etc.).
     data:   event-specific fields (ok, detail, verdicts, attempt, passed, reason, etc.).
+    Every record carries the current run_id for cross-log correlation.
     """
     ts = round(time.time(), 3)
-    record = {"ts": ts, "step": step, **data}
+    record = {"ts": ts, "step": step, "run_id": _PROGRESS_RUN_ID, **data}
     # Write to progress.jsonl (always — machine channel is independent of stderr level)
     if run_dir:
         try:
@@ -133,16 +140,38 @@ def _progress(step, detail="", ok=None, *, run_dir=None, **event_data):
     # Emit stderr only if the progress level allows it
     level = _progress_level()
     if level >= _LEVEL_QUIET + 1:  # any level above quiet
-        print(f"[devloop] {marker} {step} ({elapsed_s}{eta}): {detail}", file=sys.stderr, flush=True)
+        _rid = f"[{_PROGRESS_RUN_ID}] " if _PROGRESS_RUN_ID else ""
+        print(f"[devloop] {_rid}{marker} {step} ({elapsed_s}{eta}): {detail}", file=sys.stderr, flush=True)
+
+
+def _progress_crash(run_dir, step, exc, *, run_id=None):
+    """Emit a crash marker when a phase exits with an unhandled exception.
+    Writes a ❌ marker with the exception type + a truncated traceback to both
+    progress.jsonl and stderr. This is the failure-mode observability the control
+    channel needs — without it, a mid-phase crash leaves the last marker as ⏳
+    (in-progress), which is indistinguishable from a hung run.
+    """
+    _rid = run_id or _PROGRESS_RUN_ID
+    exc_str = f"{type(exc).__name__}: {exc}"
+    tb = traceback.format_exc()
+    # truncate traceback to last 800 chars (the relevant frames)
+    tb = tb[-800:] if len(tb) > 800 else tb
+    _progress_event(run_dir, "crash", ok=False,
+                    detail=exc_str, traceback=tb, crash_step=step, run_id=_rid)
+    if _progress_level() >= _LEVEL_QUIET + 1:
+        _rid_str = f"[{_rid}] " if _rid else ""
+        print(f"[devloop] {_rid_str}❌ crash ({step}): {exc_str}", file=sys.stderr, flush=True)
 
 
 def _progress_roadmap(run_dir=None):
     """Emit the planned phase sequence once at the start of a run so the user sees what's ahead.
-    Writes to progress.jsonl always; emits to stderr only in verbose mode (compact suppresses)."""
+    Writes to progress.jsonl always; emits to stderr only in verbose mode (compact suppresses).
+    Note: pre_clarify (if it fires) happens in runner.run_task BEFORE run_v1 is called,
+    so it's not in this roadmap — its ⏳/✅ markers appear before the roadmap is emitted."""
     phases = [
         "charter", "ambiguity_gate", "design", "coverage", "quality_lint", "judge",
         "implement", "evidence", "stop_check", "regression", "overfit_audit",
-        "commit_scope", "complete",
+        "commit_scope", "complete", "summary",
     ]
     if run_dir is not None:
         _progress_event(run_dir, "roadmap", phases=phases)
@@ -150,7 +179,8 @@ def _progress_roadmap(run_dir=None):
         print("[devloop] roadmap: " + " → ".join(phases), file=sys.stderr, flush=True)
 
 
-def _return_human_review(run_dir, st, trace, reason, *, grounding=None, **extra):
+def _return_human_review(run_dir, st, trace, reason, *, grounding=None, charter=None,
+                        test_to_criterion=None, **extra):
     """Centralized HUMAN_REVIEW exit — emits terminal progress event, writes stderr (bypasses
     compact mode: blocking questions are critical info that must never be suppressed), and
     returns the standard HUMAN_REVIEW result dict. All HUMAN_REVIEW exits in run_v1 should
@@ -159,6 +189,12 @@ def _return_human_review(run_dir, st, trace, reason, *, grounding=None, **extra)
     _progress_event(run_dir, "terminal", terminal="HUMAN_REVIEW", reason=reason, **extra)
     # HUMAN_REVIEW always shows on stderr regardless of compact/quiet — it's critical info
     print(f"[devloop] ❌ HUMAN_REVIEW: {reason}", file=sys.stderr, flush=True)
+    if charter is not None:
+        _summary_rollup = _run_summary(
+            charter if charter else {}, st, test_to_criterion,
+            terminal="HUMAN_REVIEW")
+        _progress("summary", "rollup...", ok=None)
+        _progress("summary", _summary_rollup, ok=False)
     state.save_checkpoint(run_dir, st)
     _emit(run_dir, step="terminal", terminal="HUMAN_REVIEW", reason=reason, **extra)
     result = {"terminal": "HUMAN_REVIEW", "state": st, "trace_path": trace, "reason": reason}
@@ -171,6 +207,35 @@ def _return_human_review(run_dir, st, trace, reason, *, grounding=None, **extra)
 def _partial_grounding_from_state(run_dir, st):
     """Best-effort partial grounding placeholder when not explicitly provided."""
     return {}
+
+
+def _run_summary(charter, st, test_to_criterion, overfit_advisory=None, scope_dropped=None,
+                 *, branch=None, terminal=None):
+    """Build a one-line rollup of what the run accomplished (or why it stopped).
+
+    Used by the `complete` and `HUMAN_REVIEW` stderr markers so the user gets the
+    takeaway without opening trace.jsonl."""
+    _n_evidence = len(st.get("evidence_ledger", {}))
+    _n_criteria = len(charter.get("dod", []))
+    _n_rebuilds = st.get("rebuild_count", 0)
+    _n_replans = st.get("replan_count", 0)
+    _n_tests = len(test_to_criterion) if test_to_criterion else 0
+    _split_votes = st.get("split_votes", 0)
+    parts = [f"criteria={_n_criteria}/{_n_criteria}", f"tests={_n_tests}", f"evidence={_n_evidence}"]
+    if _n_rebuilds:
+        parts.append(f"rebuilds={_n_rebuilds}")
+    if _n_replans:
+        parts.append(f"replans={_n_replans}")
+    if _split_votes:
+        parts.append(f"splits={_split_votes}")
+    if overfit_advisory:
+        parts.append(f"advisory={len(overfit_advisory)}")
+    if scope_dropped:
+        parts.append(f"scope_dropped={len(scope_dropped)}")
+    if branch:
+        parts.append(f"branch={branch}")
+    base = f"[{terminal}]" if terminal else "[summary]"
+    return f"{base} {', '.join(parts)}"
 
 
 def _test_snapshot(cwd):
@@ -306,10 +371,19 @@ def _do_implement(implement, charter, attempt, last_failure, run_dir):
     """Call implement, emit its trace event, return (exit_code, files_changed, changed_paths). The
     first two are None for a legacy implement that just writes files and returns None (e.g. test
     fakes); a real dispatcher returns {exit_code, files_changed, summary, changed_paths}.
-    changed_paths defaults to [] (an implement that doesn't report paths just skips the lint gate)."""
+    changed_paths defaults to [] (an implement that doesn't report paths just skips the lint gate).
+
+    If implement raises, emit a crash marker and return a dispatch-error-shaped result so the
+    loop fail-closes to HUMAN_REVIEW rather than propagating an unhandled exception."""
     t0 = time.monotonic()
-    _progress("implement", f"coder attempt {attempt}...")
-    result = implement(charter, attempt, last_failure)
+    _progress("implement", f"coder attempt {attempt}{' for ' + str(len(charter.get('dod', []))) + ' criteria' if charter.get('dod') else ''}...")
+    try:
+        result = implement(charter, attempt, last_failure)
+    except Exception as e:  # noqa: BLE001 — a crashed implementer is a dispatch failure, not fatal
+        _progress_crash(run_dir, "implement", e)
+        _emit(run_dir, step="implement", attempt=attempt, exit_code=1, files_changed=0,
+              dur_s=round(time.monotonic() - t0, 2), summary=f"{type(e).__name__}: {e}"[-800:])
+        return 1, 0, []
     dur = round(time.monotonic() - t0, 2)
     if isinstance(result, dict):
         ec, fc, summ = result.get("exit_code"), result.get("files_changed"), result.get("summary", "")
@@ -318,6 +392,17 @@ def _do_implement(implement, charter, attempt, last_failure, run_dir):
         ec, fc, summ, paths = None, None, (str(result) if result else ""), []
     _emit(run_dir, step="implement", attempt=attempt, exit_code=ec, files_changed=fc,
           dur_s=dur, summary=(summ[-800:] if summ else ""))
+    _imp_detail = f"attempt {attempt}, {fc or 0} file(s) changed"
+    if paths:
+        _imp_detail += f": {', '.join(os.path.basename(p) for p in paths[:10])}"
+        if len(paths) > 10:
+            _imp_detail += f" (+{len(paths)-10} more)"
+    if summ:
+        _imp_detail += f" — {str(summ).strip()[:120]}"
+    if ec not in (0, None):
+        _imp_detail += f", exit {ec}"
+    _progress("implement", _imp_detail, ok=(ec in (0, None)),
+              attempt=attempt, files_changed=fc or 0, exit_code=ec, dur_s=dur)
     return ec, fc, paths
 
 
@@ -327,6 +412,10 @@ def _lint_gate(changed_paths, cwd, run_dir, attempt):
     lint. A missing linter / unmapped type is a skip, never a failure (see lint.py)."""
     if not changed_paths:
         return True, None
+    _lint_names = ', '.join(os.path.basename(p) for p in changed_paths[:5])
+    if len(changed_paths) > 5:
+        _lint_names += f" (+{len(changed_paths)-5} more)"
+    _progress("lint", f"checking {len(changed_paths)} file(s) [{_lint_names}], attempt {attempt}")
     ok, results = lint.lint_paths(changed_paths, cwd=cwd)
     fails = lint.failures(results)
     _emit(run_dir, step="lint", attempt=attempt, ok=ok,
@@ -334,6 +423,14 @@ def _lint_gate(changed_paths, cwd, run_dir, attempt):
           skipped=sum(1 for r in results if "skipped" in r),
           failures=[{"path": r["path"], "linter": r.get("linter"),
                      "out": (r.get("output") or r.get("error") or "")[-300:]} for r in fails[:8]])
+    _n_checked = sum(1 for r in results if "skipped" not in r)
+    _n_skipped = sum(1 for r in results if "skipped" in r)
+    _detail = f"{_n_checked} checked, {_n_skipped} skipped"
+    if fails:
+        _fail_names = ', '.join(os.path.basename(r["path"]) for r in fails[:5])
+        _detail += f", {len(fails)} FAIL [{_fail_names}]"
+    _progress("lint", _detail, ok=ok, attempt=attempt,
+              checked=_n_checked, skipped=_n_skipped, failed=len(fails))
     if ok:
         return True, None
     return False, {os.path.basename(r["path"]): (r.get("output") or r.get("error") or "")[-300:]
@@ -394,7 +491,7 @@ def _partial_grounding(charter, st, judge_verdicts, test_to_criterion):
 
 
 def _attempt_test_repair(charter, st, test_to_criterion, by_id, audit_a, audit_b,
-                         redesign, judge_a, judge_b, run_dir, cwd):
+                         redesign, judge_a, judge_b, run_dir, cwd, tiebreaker=None):
     """JUDGED MID-RUN TEST REPAIR (user decision 2026-07-02): the back-off is exhausted with RED
     evidence — before surrendering to a human, audit whether the ORACLE itself asserts the wrong
     output. The coder NEVER touches tests: the only repair path is the same trusted machinery
@@ -426,7 +523,11 @@ def _attempt_test_repair(charter, st, test_to_criterion, by_id, audit_a, audit_b
               reason=f"repaired tests leave criteria uncovered: {uncovered}")
         return None
     tests = [{"test_id": tid, "criterion_id": cid} for tid, cid in new_map.items()]
-    verdicts = dod_oracle.judge_assertions(tests, by_id, judge_a, judge_b)
+    verdicts = dod_oracle.judge_assertions(tests, by_id, judge_a, judge_b, run_dir=run_dir,
+                            judge_a_model=getattr(__import__('dispatch'), "JUDGE_A", ""),
+                            judge_b_model=getattr(__import__('dispatch'), "JUDGE_B", ""),
+                            tiebreaker=tiebreaker,
+                            tiebreaker_model=getattr(__import__('dispatch'), "TIEBREAKER", ""))
     _emit(run_dir, step="judge", repair=True,
           verdicts=[{"criterion": v["criterion_id"], "encodes": v["encodes"],
                      "escalate": v["escalate"], "judge_a": v.get("judge_a"),
@@ -443,7 +544,7 @@ def _attempt_test_repair(charter, st, test_to_criterion, by_id, audit_a, audit_b
 def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_dir,
            cwd=None, max_passes=64, regression_cmd=None,
            redesign=None, audit_a=None, audit_b=None, overfit_a=None, overfit_b=None,
-           scope_audit=None):
+           scope_audit=None, tiebreaker=None):
     """v1 loop = v0 + the DoD oracle. After the ambiguity gate, DESIGN generates tests FROM the
     DoD (`design(charter) -> {test_id: criterion_id}`, writing the test files); structural
     coverage must hold (fail-closed -> HUMAN_REVIEW); then each pass IMPLEMENTs, runs evidence,
@@ -465,21 +566,24 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
     that cannot be regenerated routes HUMAN_REVIEW (never a false-complete).
     """
     run_dir = str(run_dir)
-    global _PROGRESS_START, _PROGRESS_RUN_DIR
+    global _PROGRESS_START, _PROGRESS_RUN_DIR, _PROGRESS_RUN_ID
     _PROGRESS_START = time.monotonic()
     _PROGRESS_RUN_DIR = run_dir  # so _progress() can write to progress.jsonl
+    _PROGRESS_RUN_ID = uuid.uuid4().hex[:8]  # short correlation ID for this run
     Path(run_dir).mkdir(parents=True, exist_ok=True)
     trace = str(Path(run_dir) / "trace.jsonl")
     _progress_roadmap(run_dir)
     _emit(run_dir, **_charter_event(charter))
     _progress("charter", "decomposing request...")
     _persist(run_dir, "charter.json", charter)
+    _progress("charter", f"{len(charter['dod'])} criteria, {len(charter.get('assumptions', []))} assumptions",
+              ok=True)
     decision, reason = gate.ambiguity_gate(charter)
     _emit(run_dir, step="ambiguity_gate", decision=decision, reason=reason)
-    _progress("ambiguity_gate", reason[:60] if reason else "passed")
+    _progress("ambiguity_gate", reason[:60] if reason else "passed", ok=(decision == config.DECISION_PROCEED))
     if decision != config.DECISION_PROCEED:
         st = state.new_run_state(charter)
-        return _return_human_review(run_dir, st, trace, reason)
+        return _return_human_review(run_dir, st, trace, reason, charter=charter)
 
     # Every invoke is FRESH — loop-level resume was DELETED (deep review 2026-07-01): both real
     # entrypoints (devloop_bridge._name pid+time_ns, project._attempt_name) mint a unique run_dir,
@@ -497,11 +601,14 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
     n_tests = len(test_to_criterion)
     cov_ok, uncovered = dod_oracle.check_structural_coverage(charter["dod"], test_to_criterion)
     _emit(run_dir, step="coverage", ok=cov_ok, uncovered=uncovered)
+    _progress("design", f"{n_tests} test(s) rendered for {len(by_id)} criteria",
+              ok=True, n_tests=n_tests, n_criteria=len(by_id))
     _progress("coverage", f"{n_tests} tests covering {len(by_id)} criteria", ok=cov_ok,
               n_tests=n_tests, n_criteria=len(by_id), uncovered=uncovered)
     if not cov_ok:
         cov_reason = f"DoD criteria with no covering test: {uncovered}"
-        return _return_human_review(run_dir, st, trace, cov_reason)
+        return _return_human_review(run_dir, st, trace, cov_reason,
+                                     charter=charter, test_to_criterion=test_to_criterion)
 
     # PRE-JUDGE QUALITY GATE (Layer 1): fast static check for known-rejected test patterns.
     # Runs before the 2-model judges to avoid burning ~6 minutes on tests the designer can
@@ -510,7 +617,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
     import quality_lint
     quality_ok, quality_findings = quality_lint.lint_rendered_tests(cwd or run_dir)
     _emit(run_dir, step="quality_lint", ok=quality_ok, findings=quality_findings)
-    _progress("quality_lint", "checking rendered tests", ok=quality_ok)
+    _progress("quality_lint", f"{'passed' if quality_ok else str(len(quality_findings)) + ' findings'}", ok=quality_ok)
     if not quality_ok:
         # QUALITY LINT REDESIGN (2026-07-05): instead of going straight to HUMAN_REVIEW,
         # spend the ONE oracle regeneration budget to fix the tests — same as judge-distrust.
@@ -538,6 +645,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
             try:
                 new_map, new_verify = redesign(charter, all_cids, quality_feedback)
             except Exception as e:  # noqa: BLE001
+                _progress_crash(run_dir, "quality_lint_redesign", e)
                 _emit(run_dir, step="test_repair", ok=False,
                       reason=f"quality_lint redesign failed: {type(e).__name__}: {e}")
             else:
@@ -590,7 +698,12 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
     # so the encoding judgment is stable across rebuilds. Re-judging every pass only re-rolls the
     # non-deterministic judges and can flip a recoverable code-fault into a fatal "test fault". Judge
     # once here, reuse the verdicts in every stop_condition below.
-    judge_verdicts = dod_oracle.judge_assertions(tests, by_id, judge_a, judge_b)
+    _progress("judge", f"judging {len(tests)} test(s) for {len(by_id)} criteria...")
+    judge_verdicts = dod_oracle.judge_assertions(tests, by_id, judge_a, judge_b, run_dir=run_dir,
+                            judge_a_model=getattr(__import__('dispatch'), "JUDGE_A", ""),
+                            judge_b_model=getattr(__import__('dispatch'), "JUDGE_B", ""),
+                            tiebreaker=tiebreaker,
+                            tiebreaker_model=getattr(__import__('dispatch'), "TIEBREAKER", ""))
     _emit(run_dir, step="judge",
           verdicts=[{"criterion": v["criterion_id"], "encodes": v["encodes"], "escalate": v["escalate"],
                      "judge_a": v.get("judge_a"), "judge_b": v.get("judge_b"),
@@ -605,7 +718,21 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
          "judge_b_reason": v.get("judge_b_reason", "")}
         for v in judge_verdicts
     ]
-    _progress("judge", f"{_trusted}/{len(judge_verdicts)} criteria trusted",
+    _untrusted_ids = [v["criterion_id"] for v in judge_verdicts if not v.get("encodes")]
+    _judge_detail = f"{_trusted}/{len(judge_verdicts)} criteria trusted"
+    if _untrusted_ids:
+        _judge_detail += f" ({', '.join(_untrusted_ids[:5])}{'...' if len(_untrusted_ids) > 5 else ''} UNTRUSTED)"
+        # Surface why the first untrusted criterion was distrusted so the user sees the learning live.
+        _first = next((v for v in judge_verdicts if not v.get("encodes")), None)
+        if _first:
+            _reasons = []
+            for key, label in [("judge_a_reason", "A"), ("judge_b_reason", "B")]:
+                r = _first.get(key, "")
+                if isinstance(r, str) and r.strip():
+                    _reasons.append(f"{label}: {r.strip()[:60]}")
+            if _reasons:
+                _judge_detail += f" — {' | '.join(_reasons)}"
+    _progress("judge", _judge_detail,
               ok=_trusted == len(judge_verdicts),
               trusted=_trusted, total=len(judge_verdicts),
               verdicts=_verdicts_summary)
@@ -625,6 +752,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
         try:
             new_map, new_verify = redesign(charter, untrusted, untrusted_verdicts)
         except Exception as e:  # noqa: BLE001 — a failed regeneration keeps the original verdicts
+            _progress_crash(run_dir, "upfront_redesign", e)
             _emit(run_dir, step="test_repair", ok=False,
                   reason=f"up-front redesign failed: {type(e).__name__}: {e}")
         else:
@@ -634,7 +762,11 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                 test_to_criterion = new_map
                 verify_cmd_for = new_verify
                 tests = [{"test_id": tid, "criterion_id": cid} for tid, cid in new_map.items()]
-                judge_verdicts = dod_oracle.judge_assertions(tests, by_id, judge_a, judge_b)
+                judge_verdicts = dod_oracle.judge_assertions(tests, by_id, judge_a, judge_b, run_dir=run_dir,
+                            judge_a_model=getattr(__import__('dispatch'), "JUDGE_A", ""),
+                            judge_b_model=getattr(__import__('dispatch'), "JUDGE_B", ""),
+                            tiebreaker=tiebreaker,
+                            tiebreaker_model=getattr(__import__('dispatch'), "TIEBREAKER", ""))
                 _emit(run_dir, step="judge", repair=True,
                       verdicts=[{"criterion": v["criterion_id"], "encodes": v["encodes"],
                                  "escalate": v["escalate"], "judge_a": v.get("judge_a"),
@@ -664,7 +796,15 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
     _emit(run_dir, step="frozen_tests", n=len(frozen_tests))
     _persist_oracle(run_dir, frozen_tests)
 
-    _emit(run_dir, step="lint_discovery", coverage=lint.discover())   # which linters are runnable here
+    # LINTER DISCOVERY: report which linters are runnable in this environment.
+    # Fast path: probe only linters for file types present in the frozen test set
+    # (the coder's output isn't known yet, but the test files are already on disk).
+    _discovery_paths = list(frozen_tests)
+    _progress("lint_discovery", "discovering available linters...")
+    _discovery = lint.discover(_discovery_paths)
+    _emit(run_dir, step="lint_discovery", coverage=_discovery)
+    _n_linters = sum(len(r.get("available", [])) for r in _discovery if isinstance(r, dict) and r.get("covered"))
+    _progress("lint_discovery", f"{_n_linters} linter(s) available for {len(_discovery_paths)} file(s)", ok=True)
     last_failure = None
     last_sreason = ""        # last stop-condition reason (carries which criteria/judges blocked) -> the
     #                          informative 'why' for the back-off / no-termination terminal lessons
@@ -681,7 +821,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                     and not st.get("repair_used"):
                 rep = _attempt_test_repair(charter, st, test_to_criterion, by_id,
                                            audit_a, audit_b, redesign, judge_a, judge_b,
-                                           run_dir, cwd)
+                                           run_dir, cwd, tiebreaker=tiebreaker)
             if rep is not None:
                 test_to_criterion = rep["test_map"]
                 verify_cmd_for = rep["verify"]
@@ -696,6 +836,8 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                 state.on_repair(st)                        # ONE fresh budget; repair_used pins it
                 state.save_checkpoint(run_dir, st)
                 _emit(run_dir, step="test_repair", ok=True, criteria=rep["wrong"])
+                _progress("test_repair", f"oracle regenerated for {rep['wrong']}", ok=True,
+                          criteria=rep["wrong"])
                 last_failure = {"test_repair": "the tests for criteria "
                                                f"{rep['wrong']} were REGENERATED (the previous "
                                                "ones asserted the wrong output). Re-read the "
@@ -719,6 +861,8 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
         if action == "REPLAN":
             state.on_replan(st)
             _emit(run_dir, step="replan", replan=st["replan_count"])
+            _progress("replan", f"replan {st['replan_count']} triggered", ok=False,
+                      replan=st["replan_count"])
             continue
 
         attempt = st["rebuild_count"]
@@ -731,6 +875,8 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
             last_failure = {"lint": lint_fb}
             state.on_rebuild_fail(st)
             _emit(run_dir, step="rebuild_fail", rebuild=st["rebuild_count"], cause="lint")
+            _progress("rebuild", f"attempt {attempt} failed lint → rebuild {st['rebuild_count']}",
+                      ok=False, cause="lint", attempt=attempt, rebuild=st["rebuild_count"])
             _attempt_note(run_dir, attempt=attempt, gate="lint", ok=False,
                           detail=str(lint_fb)[:300])
             continue
@@ -744,18 +890,23 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
         if viol:
             restored = _frozen_restore(cwd, frozen_tests)
             _emit(run_dir, step="frozen_tests", ok=False, reason=viol, restored=restored)
+            _progress("frozen_tests", f"violation detected, {len(restored)} file(s) restored",
+                      ok=False, violation=viol, restored=len(restored))
             last_failure = {"frozen_tests": viol + " — the original test files were RESTORED by the "
                                                    "loop. Tests are the ORACLE: never edit, move, or "
                                                    "delete them; change the CODE to satisfy them."}
             last_sreason = viol
             state.on_rebuild_fail(st)
             _emit(run_dir, step="rebuild_fail", rebuild=st["rebuild_count"], cause="frozen_tests")
+            _progress("rebuild", f"attempt {attempt} violated frozen tests → rebuild {st['rebuild_count']}",
+                      ok=False, cause="frozen_tests", attempt=attempt, rebuild=st["rebuild_count"])
             _attempt_note(run_dir, attempt=attempt, gate="frozen_tests", ok=False,
                           detail=str(viol)[:300])
             state.save_checkpoint(run_dir, st)
             continue
 
         ledger = {}
+        _progress("evidence", f"running {len(ids)} test command(s) for {len(ids)} criteria [{', '.join(ids[:5])}{'...' if len(ids) > 5 else ''}], attempt {attempt}...")
         for cid in ids:
             ev = evidence.run(cid, verify_cmd_for(cid), cwd=cwd)
             ledger[cid] = ev
@@ -791,17 +942,20 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
             # tests collected = vacuous pass; see gate.regression_gate). Red = a CODE fault the
             # coder can act on -> feed the failing output back and re-IMPLEMENT under the same
             # back-off budget (bounded -> HUMAN_REVIEW), never COMPLETE.
+            _progress("regression", "running whole-suite regression...")
             reg = evidence.run("__suite__", list(regression_cmd or _REGRESSION_CMD), cwd=cwd)
             reg_ok, rreason = gate.regression_gate(reg)
             st["evidence_ledger"]["__suite__"] = reg     # ledger keys are c1..cN; no collision
             _emit(run_dir, step="regression", exit=reg.exit_code, passed=reg_ok, reason=rreason)
-            _progress("regression", "whole-suite", ok=reg_ok)
+            _progress("regression", f"whole-suite exit {reg.exit_code}", ok=reg_ok)
             state.save_checkpoint(run_dir, st)
             if not reg_ok:
                 last_failure = {"regression": (reg.stdout_tail or reg.stderr_tail or "")[-800:]}
                 last_sreason = rreason
                 state.on_rebuild_fail(st)
                 _emit(run_dir, step="rebuild_fail", rebuild=st["rebuild_count"], cause="regression")
+                _progress("rebuild", f"attempt {attempt} failed regression → rebuild {st['rebuild_count']}",
+                          ok=False, cause="regression", attempt=attempt, rebuild=st["rebuild_count"])
                 _attempt_note(run_dir, attempt=attempt, gate="regression", ok=False,
                               detail=str(rreason)[:300])
                 continue
@@ -818,6 +972,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
             overfit_advisory = []
             if (overfit_a is not None and overfit_b is not None and redesign is not None
                     and not st.get("repair_used") and not st.get("overfit_checked")):
+                _progress("overfit_audit", f"auditing {len(ids)} criteria x 2 auditors...")
                 st["overfit_checked"] = True
                 inv = {}
                 for tid, cid in test_to_criterion.items():
@@ -839,7 +994,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                         if is_overfit:
                             suspect.append(cid)
                 _emit(run_dir, step="overfit_audit", suspect=suspect, details=details)
-                _progress("overfit_audit", f"{len(ids)} criteria x 2 auditors", ok=not suspect)
+                _progress("overfit_audit", f"{len(ids)} criteria x 2 auditors, {len(suspect)} suspect", ok=not suspect)
                 _persist(run_dir, "overfit_audit.json", {"suspect": suspect, "details": details})
                 overfit_advisory = [d["criterion"] for d in details
                                     if any(d["votes"]) and not d["overfit"]]
@@ -853,7 +1008,11 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                         _emit(run_dir, step="coverage", ok=cov3, uncovered=unc3, repair=True)
                         if cov3:
                             tests2 = [{"test_id": t, "criterion_id": c} for t, c in new_map.items()]
-                            jv2 = dod_oracle.judge_assertions(tests2, by_id, judge_a, judge_b)
+                            jv2 = dod_oracle.judge_assertions(tests2, by_id, judge_a, judge_b, run_dir=run_dir,
+                                judge_a_model=getattr(__import__('dispatch'), "JUDGE_A", ""),
+                                judge_b_model=getattr(__import__('dispatch'), "JUDGE_B", ""),
+                                tiebreaker=tiebreaker,
+                                tiebreaker_model=getattr(__import__('dispatch'), "TIEBREAKER", ""))
                             _emit(run_dir, step="judge", repair=True,
                                   verdicts=[{"criterion": v["criterion_id"], "encodes": v["encodes"],
                                              "escalate": v["escalate"], "judge_a": v.get("judge_a"),
@@ -887,6 +1046,8 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                     state.on_repair(st)
                     state.save_checkpoint(run_dir, st)
                     _emit(run_dir, step="test_repair", ok=True, criteria=suspect)
+                    _progress("test_repair", f"overfit audit regenerated tests for {suspect}",
+                              ok=True, criteria=suspect, cause="overfit")
                     last_failure = {"test_repair": f"the tests for criteria {suspect} were "
                                                    "REGENERATED (the previous ones asserted values "
                                                    "their criterion's semantics do not produce). "
@@ -902,6 +1063,7 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
             # exclusion destroys work). The model classifies; the gate decides.
             scope_dropped = []
             if scope_audit is not None and not st.get("scope_checked"):
+                _progress("commit_scope", "classifying changed files...")
                 st["scope_checked"] = True
                 protected = {".gitignore"}
                 for tid in test_to_criterion:                     # the oracle files, always
@@ -968,6 +1130,10 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                         note = f"prune broke verification ({why_red}); all files restored"
                 _emit(run_dir, step="commit_scope", dropped=scope_dropped,
                       verdicts=verdicts, note=note)
+                _progress("commit_scope",
+                          f"{len(scope_dropped)} file(s) dropped as scratch" if scope_dropped
+                          else "all files are deliverable",
+                          ok=True, dropped=len(scope_dropped), note=note)
                 _persist(run_dir, "commit_scope.json",
                          {"dropped": scope_dropped, "verdicts": verdicts, "note": note})
             grounding = _grounding_report(charter, st["evidence_ledger"], judge_verdicts,
@@ -977,10 +1143,28 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                 grounding["overfit_advisory"] = overfit_advisory
             _emit(run_dir, step="grounding", **grounding)
             _persist(run_dir, "grounding.json", grounding)
-            _progress("complete", "all gates passed, merging...")
+            _progress("complete", "all gates passed, merging...", ok=None)
             _progress_event(run_dir, "terminal", terminal="COMPLETE",
                             grounding_summary={c["criterion_id"]: c for c in grounding.get("criteria", [])})
             _emit(run_dir, step="terminal", terminal="COMPLETE")
+            # Learnings summary: what this run accomplished
+            _n_evidence = len(st.get("evidence_ledger", {}))
+            _n_criteria = len(charter.get("dod", []))
+            _n_rebuilds = st.get("rebuild_count", 0)
+            _n_replans = st.get("replan_count", 0)
+            _n_tests = len(test_to_criterion) if test_to_criterion else 0
+            _summary = (f"merged: {_n_criteria} criteria met, {_n_tests} tests passed, "
+                        f"{_n_evidence} evidence entries"
+                        f"{f', {_n_rebuilds} rebuild(s)' if _n_rebuilds else ''}"
+                        f"{f', {_n_replans} replan(s)' if _n_replans else ''}")
+            _progress("complete", _summary, ok=True)
+            _summary_rollup = _run_summary(
+                charter, st, test_to_criterion,
+                overfit_advisory=overfit_advisory,
+                scope_dropped=scope_dropped,
+                terminal="COMPLETE")
+            _progress("summary", "rollup...", ok=None)
+            _progress("summary", _summary_rollup, ok=True)
             return {"terminal": "COMPLETE", "state": st, "trace_path": trace, "reason": sreason,
                     "grounding": grounding, "scope_dropped": scope_dropped}
 
@@ -993,6 +1177,10 @@ def run_v1(charter, *, design, implement, judge_a, judge_b, verify_cmd_for, run_
                         for cid in ids if not ledger[cid].passed} or {"oracle": sreason}
         state.on_rebuild_fail(st)
         _emit(run_dir, step="rebuild_fail", rebuild=st["rebuild_count"])
+        _progress("rebuild",
+                  f"attempt {attempt} evidence failed ({_n_passed}/{_n_total}) → rebuild {st['rebuild_count']}",
+                  ok=False, cause="evidence", attempt=attempt, rebuild=st["rebuild_count"],
+                  passed=_n_passed, total=_n_total)
 
     nt_reason = "max_passes exhausted without a terminal decision (bug sentinel)" + (
         f"; last failure: {last_sreason}" if last_sreason else "")

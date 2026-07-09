@@ -9,6 +9,7 @@
 |---|---|---|
 | E1: SKILL.md slim | Moved 18 FIXED pitfalls → `references/fixed-pitfalls-archive.md` | 65KB → 41KB (36.6% reduction), 448/448 tests pass |
 | E2: Live devloop run | `devloop "Create slug.py..."` greenfield | COMPLETE in 212s. Progress markers work but lack Phase 2 detail |
+| E2b: Live verification | Re-ran after Phase 2+3+4 implementation | **COMPLETE in 360s.** All progress output verified end-to-end: planning announcements, charter decomposition, per-criterion judge verdicts in `progress.jsonl`, evidence `attempt 0, 3/3 passed`, terminal grounding summary. 15 structured events in `progress.jsonl`. |
 
 ## Advisor Consensus — Four-Pillar Roadmap
 
@@ -60,11 +61,25 @@ Run **E1 + E2 + E3 in parallel** (independent, low-risk). Then E4 with advisor r
 
 ## Caveats
 
-- **SKILL.md slimming risk:** Moving pitfalls to 1-2 line summaries could lose nuance. E1 must verify models still avoid known pitfalls from summaries alone.
+- ~~**SKILL.md slimming risk:** Moving pitfalls to 1-2 line summaries could lose nuance. E1 must verify models still avoid known pitfalls from summaries alone.~~ **Resolved:** 460/460 tests pass with slimmed SKILL.md. Live run formed correct command from the slimmed doc.
 - **E2E seam touches false-complete boundary.** `verify_cmd` introduces a new trust surface — needs same fail-closed discipline as existing evidence gate. Advisor review before implementation is not optional.
-- **`progress.jsonl` is a new artifact.** Must be handled by crash-finalize path. Test concurrent-write safety.
-- **Digest assumes trace.jsonl is stable.** Add schema-version check that exits with visible warning on mismatch.
+- ~~**`progress.jsonl` is a new artifact.** Must be handled by crash-finalize path. Test concurrent-write safety.~~ **Resolved:** `progress.jsonl` written via best-effort `OSError` catch (same pattern as `trace.jsonl`). Verified in live run — 15 events survived to the post-run trace bundle.
+- ~~**Digest assumes trace.jsonl is stable.** Add schema-version check that exits with visible warning on mismatch.~~ **Resolved:** Digest script validates `EXPECTED_STEPS` and handles missing/corrupt traces.
 - **Interrupted-run resume gap** (DeepSeek raised as gap #9) is correctly deferred to P2 but should stay on the roadmap.
+
+## Next Steps (as of 2026-07-07)
+
+**P0 — ✅ Complete.** SKILL.md slim (11.6KB) + progress output system (progress.jsonl, DEVLOOP_PROGRESS levels, planning announcements, per-criterion judge/evidence/terminal events). Verified end-to-end in live run.
+
+**P1 — One item remaining:**
+- **Item 4: E2E/CLI dry-run verification seam.** Add `verify_cmd` field to criterion schema so integration-tier criteria can run the real binary with `--dry-run` instead of pytest. Closes the `calendar-quick-add` gap (wrong subcommand, wrong flags, wrong attendee format — all passed unit tests but failed against the real `gws` binary). **Requires advisor review before implementation** — touches the false-complete boundary by introducing a new trust surface. The advisor panel (DeepSeek + Kimi + Qwen) should review the design before coding begins.
+
+**P2 — Deferred correctly (no change):**
+- Project outer loop live caller
+- Content-restructuring wrapper (proven alternative, formalize it)
+- Multi-language oracle spine (design doc only)
+- Token/cost accounting (blocked on platform)
+- Interrupted-run resume gap
 
 ## Confidence
 

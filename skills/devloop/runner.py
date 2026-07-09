@@ -62,9 +62,112 @@ def _planning_announce(request, target, repo, name, *, planner_model=None,
                 print(f"[devloop] {label}: {detail}", file=sys.stderr, flush=True)
 
 
+# ── Pre-clarify hook (2026-07-08) ──────────────────────────────────────────
+# When devloop is called DIRECTLY (not through the scout pipeline), the request
+# may be underspecified. NBQ fast-ranks whether clarification is needed; if so,
+# the investigator researches the top questions and produces a refined prompt.
+# When devloop is called through scout, the scout's own clarify phase already
+# resolved these unknowns, so NBQ will find an empty bucket and skip (no
+# duplication). See references/nbq-investigator-integration.md.
+
+def _pre_clarify(request, target_dir, run_dir=None, floor=0.30):
+    """Check if the request is underspecified; if so, refine it via investigator.
+
+    Returns the refined prompt string, or None if the request is well-specified
+    (NBQ bucket empty or all questions below floor). The NBQ fast-rank call is
+    the gate — one model call determines whether the heavier investigator loop
+    is warranted.
+    """
+    try:
+        import json as _json
+        # Resolve NBQ scripts dir
+        home = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
+        nbq_dir = os.path.join(home, "skills", "autonomous-ai-agents",
+                               "next-best-questions", "scripts")
+        if not os.path.isdir(nbq_dir):
+            return None  # NBQ not installed — skip gracefully
+        if nbq_dir not in sys.path:
+            sys.path.insert(0, nbq_dir)
+        import infogain  # noqa: E402
+
+        # Fast-rank: single model call, returns ranked questions
+        cfg = infogain.eval_cfg("glm")  # all stages pinned to glm
+        cfg["auto_derive"] = False      # don't derive — just rank
+        result = infogain.run(request, cfg)
+        # NBQ returns "bucket" (surviving questions) and "all_scored" (all candidates)
+        questions = result.get("bucket") or result.get("all_scored") or result.get("questions", [])
+        above_floor = [q for q in questions
+                       if (q.get("value") or 0) >= floor
+                       and q.get("gated_out") is not True
+                       and q.get("recommendation") not in ("REDUNDANT", "SKIP")]
+
+        if not above_floor:
+            if run_dir:
+                loop._progress_event(run_dir, "pre_clarify", ok=True,
+                    detail="well-specified, skipping investigator")
+            level = loop._progress_level()
+            if level >= loop._LEVEL_VERBOSE:
+                print(f"[devloop] ✅ pre_clarify: well-specified, skipping investigator",
+                      file=sys.stderr, flush=True)
+            return None
+
+        # Questions above floor → run investigator in quick mode
+        n_above = len(above_floor)
+        if run_dir:
+            loop._progress_event(run_dir, "pre_clarify", ok=None,
+                detail=f"{n_above} questions above floor, investigating...")
+        level = loop._progress_level()
+        if level >= loop._LEVEL_VERBOSE:
+            print(f"[devloop] ⏳ pre_clarify: {n_above} questions above floor, investigating...",
+                  file=sys.stderr, flush=True)
+
+        inv_dir = os.path.join(home, "skills", "autonomous-ai-agents",
+                               "investigator", "scripts")
+        if inv_dir not in sys.path:
+            sys.path.insert(0, inv_dir)
+        import iterate  # noqa: E402
+
+        inv_result = iterate.iterate(
+            request,
+            cfg={
+                "k": 2, "max_rounds": 1, "floor": floor,
+                "output": "prompt", "fast_rank": True,
+                "capability": "read",  # read-only — don't modify the repo
+                "answer_cwd": target_dir,
+            })
+
+        refined = inv_result.get("refined_prompt") or inv_result.get("response")
+        n_answered = sum(1 for t in inv_result.get("tombstones", [])
+                         if t.get("kind") == "answered")
+        n_gaps = sum(1 for t in inv_result.get("tombstones", [])
+                     if t.get("kind") == "not_found")
+
+        if run_dir:
+            loop._progress_event(run_dir, "pre_clarify", ok=True,
+                detail=f"refined request with {n_answered} fact(s), {n_gaps} gap(s)")
+        if level >= loop._LEVEL_VERBOSE:
+            print(f"[devloop] ✅ pre_clarify: refined request with "
+                  f"{n_answered} fact(s), {n_gaps} gap(s)",
+                  file=sys.stderr, flush=True)
+
+        return refined if refined else None
+
+    except Exception as e:
+        # Pre-clarify is an enhancement, not a gate — any failure skips gracefully
+        if run_dir:
+            loop._progress_event(run_dir, "pre_clarify", ok=False,
+                detail=f"skipped: {type(e).__name__}")
+        level = loop._progress_level()
+        if level >= loop._LEVEL_VERBOSE:
+            print(f"[devloop] ⚠️  pre_clarify: skipped ({type(e).__name__})",
+                  file=sys.stderr, flush=True)
+        return None
+
+
 def run_task(repo, request, root, name, *, judge_a=None, judge_b=None,
              make_charter=None, make_refiner=None, make_advisor=None,
-             make_designer=None, make_implementer=None):
+             make_designer=None, make_implementer=None,
+             pre_clarify=None, keep_worktree=False):
     # STRUCTURED test design (#17) is THE designer (the config every passing go/no-go spike ran;
     # coverage is DERIVED from rendered node ids, so a designer can't fabricate it). The legacy
     # free-form path was DELETED 2026-07-01 (zero passing-spike evidence; 5 parser accommodations).
@@ -96,9 +199,11 @@ def run_task(repo, request, root, name, *, judge_a=None, judge_b=None,
         if real_judges:
             judge_a = dispatch.judge_via_ask(dispatch.JUDGE_A, target)
             judge_b = dispatch.judge_via_ask(dispatch.JUDGE_B, target)
+            _tiebreaker = dispatch.tiebreaker_via_ask(target_dir=target)
         else:
             judge_a = judge_a or (lambda t, c: True)
             judge_b = judge_b or (lambda t, c: True)
+            _tiebreaker = None
         run_dir = os.path.join(target, ".devloop", "runs", name)   # hidden from the diff via info/exclude
         # DEVLOOP_DEBUG=1 (user ask 2026-07-03): point dispatch's prompt/reply capture at THIS
         # run's dir so the captures ride the post-run bundle. One run per process at the CLI
@@ -110,8 +215,22 @@ def run_task(repo, request, root, name, *, judge_a=None, judge_b=None,
         _planning_announce(request, target, repo, name,
                            planner_model=getattr(dispatch, "PLANNER", None) if real_judges else None)
 
+        # PRE-CLARIFY HOOK (2026-07-08): opt-in NBQ+investigator clarification
+        # before the charter phase. Defaults to OFF — the existing vague_goal_gate
+        # and ambiguity_gate already catch underspecification deterministically
+        # (routing to HUMAN_REVIEW) without model calls. Pre-clarify is only
+        # useful when a caller KNOWS their request is vague and wants the
+        # investigator to refine it before charter. See references/nbq-investigator-integration.md.
+        if pre_clarify:
+            refined = _pre_clarify(request, target, run_dir=run_dir)
+            if refined and refined != request:
+                request = refined
+
+        loop._progress_event(run_dir, "charter", detail="drafting charter...")
         charter = make_charter(request)            # DRAFT (planner)
+        loop._progress_event(run_dir, "refine", detail="refining charter...")
         charter = make_refiner(charter, request)   # REFINE (atomicize)
+        loop._progress_event(run_dir, "advisor", detail="advisor review...")
         charter = make_advisor(charter, request)   # ADVISORS review (blocking gaps -> open_questions)
         # POST-CHARTER ANNOUNCEMENT: show the user the decomposed DoD
         _n_crit = len(charter.get("dod", []))
@@ -143,6 +262,7 @@ def run_task(repo, request, root, name, *, judge_a=None, judge_b=None,
         goal_text = request.split(config.LESSONS_HEADER, 1)[0]
         decision, reason = gate.vague_goal_gate(goal_text, charter)
         vague = decision != config.DECISION_PROCEED
+        loop._progress_event(run_dir, "vague_goal_gate", ok=not vague, detail=reason[:60] if reason else "passed")
         if not vague:
             decision, reason = gate.ambiguity_gate(charter)
 
@@ -243,7 +363,8 @@ def run_task(repo, request, root, name, *, judge_a=None, judge_b=None,
         res = loop.run_v1(charter, design=lambda c: test_map, implement=make_implementer(target),
                           judge_a=judge_a, judge_b=judge_b, verify_cmd_for=verify, run_dir=run_dir,
                           cwd=target, redesign=_redesign, audit_a=audit_a, audit_b=audit_b,
-                          overfit_a=overfit_a, overfit_b=overfit_b, scope_audit=scope_audit)
+                          overfit_a=overfit_a, overfit_b=overfit_b, scope_audit=scope_audit,
+                          tiebreaker=_tiebreaker)
         return {"result": res, "worktree": wt, "charter": charter}
     except BaseException as e:
         # CRASH-FINALIZE (fix 2026-07-02): any exception once the worktree exists — a dispatch
@@ -253,7 +374,12 @@ def run_task(repo, request, root, name, *, judge_a=None, judge_b=None,
         # BaseException (not Exception): KeyboardInterrupt/SystemExit must clean up too, and the
         # re-raise below preserves fail-closed routing (call_guarded / the caller sees the error).
         try:
-            worktree.finalize(wt, f"devloop CRASHED ({type(e).__name__}): {name}")
-        except Exception:   # noqa: BLE001 — cleanup is best-effort, never a second failure
+            loop._progress_crash(run_dir, "run_v1", e)
+        except Exception:   # noqa: BLE001
             pass
+        if not keep_worktree:
+            try:
+                worktree.finalize(wt, f"devloop CRASHED ({type(e).__name__}): {name}")
+            except Exception:   # noqa: BLE001 — cleanup is best-effort, never a second failure
+                pass
         raise
