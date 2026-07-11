@@ -12,31 +12,31 @@ Tests are organized in groups:
   5. Live dispatch — slow, requires API (skipped if OLLAMA_URL unreachable)
 """
 
+import io
 import json
 import os
 import subprocess
 import sys
-import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 # Add parent dir to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from ask import (
-    ALIASES, THINKING_LEVELS, resolve_alias, is_known_model,
+    THINKING_LEVELS, resolve_alias, is_known_model,
     build_prompt, clean_output, get_reasoning_effort, set_reasoning_effort,
-    dispatch_single, dispatch_comparison, NON_ENGLISH_MODELS,
-    save_session, get_session, SESSIONS_FILE,
-    dispatch_single_raw, _run_raw_mode, _run_agent_mode,
+    dispatch_single, dispatch_comparison, save_session, get_session, dispatch_single_raw, _run_raw_mode, _run_agent_mode,
     clean_expired_sessions,
 )
+import ask
+import model_utils
 
 HERMES_BIN = os.environ.get("HERMES_BIN", "hermes")
 ASK_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "ask.py")
 
 # Import model_utils for mocking purposes
-import model_utils
 
 
 class TestAliasResolution(unittest.TestCase):
@@ -304,6 +304,38 @@ class TestCLIParsing(unittest.TestCase):
         self.assertIn("fast", r.stderr)
 
 
+class TestEmitEvents(unittest.TestCase):
+    """Verify the ask CLI keeps its JSONL event contract."""
+
+    def test_stderr_event_callback_is_model_utils_compatibility_alias(self):
+        self.assertIs(
+            ask._make_stderr_event_callback,
+            model_utils._make_stderr_event_callback,
+        )
+
+    def test_emit_events_writes_jsonl_to_stderr(self):
+        stderr = io.StringIO()
+
+        def fake_dispatch(*args, **kwargs):
+            callback = kwargs["progress_callback"]
+            callback({"event": "dispatch_start", "model": "qwen3.6:35b-a3b"})
+            callback({"event": "dispatch_end", "model": "qwen3.6:35b-a3b", "success": True})
+            return {
+                "content": "response", "session_id": None,
+                "elapsed": 0.1, "error": None,
+            }
+
+        with patch.object(sys, "argv", ["ask.py", "fast", "hello", "--emit-events"]), \
+             patch("ask.dispatch_single", side_effect=fake_dispatch), \
+             patch("ask.get_session", return_value={}), \
+             patch.object(sys.stdin, "isatty", return_value=True), \
+             patch.object(sys, "stderr", stderr):
+            ask.main()
+
+        events = [json.loads(line) for line in stderr.getvalue().splitlines() if line.strip()]
+        self.assertEqual([event["event"] for event in events], ["dispatch_start", "dispatch_end"])
+
+
 class TestBuildPrompt(unittest.TestCase):
     """Test prompt building — fast, no API."""
 
@@ -447,7 +479,7 @@ class TestDryRunDispatch(unittest.TestCase):
             tmpfile = f.name
 
         try:
-            r = dispatch_single(
+            dispatch_single(
                 "test-model", "test", "", "", 1, 10, "test",
                 output_file=tmpfile, thinking="xhigh"
             )
@@ -548,18 +580,26 @@ class TestLiveDispatch(unittest.TestCase):
                 headers={"Content-Type": "application/json"},
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
+                payload = json.load(resp)
                 cls.ollama_reachable = True
+                cls.available_models = {
+                    model.get("name") for model in payload.get("models", [])
+                    if model.get("name")
+                }
         except Exception:
             cls.ollama_reachable = False
+            cls.available_models = set()
 
     def setUp(self):
         if not self.ollama_reachable:
             self.skipTest("Ollama API not reachable")
+        if resolve_alias("fast") not in self.available_models:
+            self.skipTest(f"fast model {resolve_alias('fast')} is unavailable")
 
     def test_live_fast_alias(self):
         """Test that 'fast' alias works end-to-end."""
         r = dispatch_single(
-            "gemma4:12b-mlx-bf16", "What is 2+2? Answer with just the number.",
+            resolve_alias("fast"), "What is 2+2? Answer with just the number.",
             "", "", 1, 60, "ollama-glm",
         )
         self.assertIsNotNone(r["content"], f"Error: {r.get('error')}")
@@ -568,8 +608,8 @@ class TestLiveDispatch(unittest.TestCase):
     def test_live_thinking_restored(self):
         """Test that reasoning effort is restored after a thinking call."""
         original = get_reasoning_effort()
-        r = dispatch_single(
-            "gemma4:12b-mlx-bf16", "What is 3+3?", "", "", 1, 30, "ollama-glm",
+        dispatch_single(
+            resolve_alias("fast"), "What is 3+3?", "", "", 1, 60, "ollama-glm",
             thinking="none",
         )
         restored = get_reasoning_effort()
@@ -636,7 +676,7 @@ class TestTriageLiveAPI(unittest.TestCase):
                 "http://host.docker.internal:11434/api/tags",
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5):
                 cls.ollama_reachable = True
         except Exception:
             cls.ollama_reachable = False
@@ -805,7 +845,6 @@ class TestComparisonEdgeCases(unittest.TestCase):
     def test_partial_failure(self, mock_run):
         """2 of 3 models succeed, 1 fails."""
         import subprocess as sp
-        results_returned = []
 
         def side_effect(cmd, **kwargs):
             if "model-b" in cmd:
@@ -979,9 +1018,8 @@ class TestGetReasoningEffortEdgeCases(unittest.TestCase):
 
     def test_missing_config_file(self):
         """Should return empty string when config file doesn't exist."""
-        # The function checks expanduser, then falls back to ${HERMES_HOME}/config.yaml.
+        # The function checks expanduser, then falls back to /opt/data/config.yaml.
         # Patch open to simulate both files being missing.
-        real_open = open
         def mock_open(path, *args, **kwargs):
             raise FileNotFoundError(f"No such file: {path}")
         with patch("builtins.open", mock_open):
@@ -1258,6 +1296,57 @@ class TestRunAgentMode(unittest.TestCase):
              patch("ask.save_session"):
             _run_agent_mode(args, [])
 
+    def test_auto_answer_resumes_same_session_after_clarification(self):
+        """A question-shaped reply is answered once and resumed in its session."""
+        args = SimpleNamespace(
+            sessions=False,
+            session=None,
+            prompt="Design the data layer",
+            models=None,
+            args=["fast"],
+            context="",
+            context_file=None,
+            provider="ollama-glm",
+            timeout=60,
+            thinking=None,
+            max_turns=5,
+            toolsets="file,web",
+            output=None,
+            resume=None,
+            mode="agent",
+            auto_answer=None,
+            cwd=None,
+        )
+        question = {
+            "content": "Which database do you prefer?",
+            "session_id": "s1",
+            "elapsed": 0.1,
+            "error": None,
+        }
+        final = {
+            "content": "Use PostgreSQL with a small connection pool.",
+            "session_id": "s1",
+            "elapsed": 0.1,
+            "error": None,
+        }
+        events = []
+        stdout = io.StringIO()
+
+        with patch("sys.stdin.isatty", return_value=True), \
+             patch("ask.get_session", return_value={}), \
+             patch("ask.dispatch_single", side_effect=[question, final]) as mock_dispatch, \
+             patch("ask.generate_auto_answer", return_value={"answer": "PostgreSQL", "error": None}):
+            with patch.object(sys, "stdout", stdout):
+                result = _run_agent_mode(args, [], progress_callback=events.append)
+
+        self.assertEqual(mock_dispatch.call_count, 2)
+        self.assertEqual(mock_dispatch.call_args_list[1].kwargs["resume_session"], "s1")
+        self.assertIn("Use PostgreSQL", stdout.getvalue())
+        auto_events = [event for event in events if event["event"] == "auto_answer"]
+        self.assertEqual(len(auto_events), 1)
+        self.assertEqual(auto_events[0]["seam"], "freetext")
+        self.assertEqual(result["auto_answers"], auto_events)
+
 
 # ── Phase 9: Test Coverage Gaps ─────────────────────────────────────────────
 
@@ -1313,7 +1402,6 @@ class TestCleanExpiredSessions(unittest.TestCase):
 
     def test_no_expired_sessions(self):
         """All sessions fresh — should remove 0."""
-        import model_utils as mu_module
         # Save a session with current timestamp
         save_session("deepseek", "model", "sid", "prompt")
         removed = clean_expired_sessions()
@@ -1462,7 +1550,7 @@ class TestRouteFallbackAlias(unittest.TestCase):
 
     def test_fallback_returns_alias_not_literal(self):
         """M10: When available_models exist but none match preferred, fallback should be from COST_TIERS not literal."""
-        from routing import route, COST_TIERS
+        from routing import route
         triage_result = {"category": "general_chat", "confidence": "high"}
         # system_state with models that don't match any preferred → triggers final fallback
         system_state = {"available_models": ["nonexistent-model"]}
@@ -1474,7 +1562,7 @@ class TestRouteFallbackAlias(unittest.TestCase):
 
     def test_fallback_no_system_state_returns_alias(self):
         """M10: With no system_state at all, model should be an alias (from COST_TIERS), not a literal model name."""
-        from routing import route, COST_TIERS
+        from routing import route
         triage_result = {"category": "general_chat", "confidence": "high"}
         # Default user_context (medium budget) → preferred = ['deepseek', 'minimax']
         # No system_state → all preferred accepted → model = 'deepseek' (an alias)
@@ -1496,7 +1584,7 @@ class TestDispatchSingleRawEnglishOnly(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=None)
         mock_urlopen.return_value = mock_resp
 
-        r = dispatch_single_raw("glm-5.2:cloud", "test", "", "ollama-glm", 30)
+        dispatch_single_raw("glm-5.2:cloud", "test", "", "ollama-glm", 30)
         # Check that the request data contains "respond in English only"
         call_args = mock_urlopen.call_args
         req = call_args[0][0]
@@ -1515,7 +1603,7 @@ class TestDispatchSingleRawEnglishOnly(unittest.TestCase):
         mock_resp.__exit__ = MagicMock(return_value=None)
         mock_urlopen.return_value = mock_resp
 
-        r = dispatch_single_raw("deepseek-v4-pro:cloud", "test", "", "ollama-glm", 30)
+        dispatch_single_raw("deepseek-v4-pro:cloud", "test", "", "ollama-glm", 30)
         call_args = mock_urlopen.call_args
         req = call_args[0][0]
         body = json.loads(req.data.decode("utf-8"))

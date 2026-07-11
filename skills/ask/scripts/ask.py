@@ -91,6 +91,7 @@ from model_utils import (
     dispatch_single,  # L1: Import directly — no wrapper needed
     dispatch_comparison,  # Consolidated: use model_utils version (has progress_callback forwarding)
     _safe_callback,  # For raw mode event emission
+    _make_stderr_event_callback,  # Compatibility re-export for --emit-events callers
     clean_expired_sessions,
     get_reasoning_effort,
     set_reasoning_effort,
@@ -99,10 +100,13 @@ from model_utils import (
     DEFAULT_PROVIDER,
     DEFAULT_TIMEOUT,
     DEFAULT_TOOLSETS,
+    DEFAULT_MAX_TURNS,
     HERMES_BIN,
     ALIASES,
     THINKING_LEVELS,
     is_known_model,
+    is_question_shaped,
+    generate_auto_answer,
 )
 
 # Re-export SESSIONS_FILE for backward compatibility with tests
@@ -213,20 +217,6 @@ def dispatch_single_raw(model: str, prompt: str, context: str, provider: str,
         }
 
 
-# ── CLI Event Emitter ─────────────────────────────────────────────────────
-
-
-def _make_stderr_event_callback() -> Callable:
-    """Create a progress_callback that prints JSON events to stderr.
-
-    Used by --emit-events CLI flag for programmatic callers that need
-    structured event output alongside stdout content.
-    """
-    def _emit(event: dict):
-        print(json.dumps(event, default=str), file=sys.stderr, flush=True)
-    return _emit
-
-
 # ── Main ───────────────────────────────────────────────────────────────────
 
 
@@ -244,7 +234,7 @@ def main():
     parser.add_argument("-c", "--context-file", help="Read context from file")
     parser.add_argument("-o", "--output", help="Output file (single model only)")
     parser.add_argument("-t", "--toolsets", default=DEFAULT_TOOLSETS, help=f"Toolsets (default: {DEFAULT_TOOLSETS})")
-    parser.add_argument("--max-turns", type=int, default=None, help="Max agent turns (default: Hermes config)")
+    parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS, help="Max agent turns (default: Hermes config)")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help=f"Timeout seconds (default: {DEFAULT_TIMEOUT})")
     parser.add_argument("--provider", default=DEFAULT_PROVIDER, help=f"Provider (default: {DEFAULT_PROVIDER})")
     parser.add_argument("--cwd", default=None, help="Working directory for the model's file/terminal tools (single model only)")
@@ -258,6 +248,12 @@ def main():
     parser.add_argument("--sessions", action="store_true", help="List all saved sessions")
     parser.add_argument("--session", metavar="ALIAS", help="Show session info for an alias")
     parser.add_argument("--clean-sessions", action="store_true", help="Remove expired sessions (TTL: 1 hour)")
+    parser.add_argument(
+        "--auto-answer", nargs="?", const=None, default=False,
+        metavar="ANSWER_MODEL",
+        help=("Automatically answer up to two clarifying questions in a single-model "
+              "agent session. Without ANSWER_MODEL, uses the primary model being asked."),
+    )
     # Use parse_known_args so unknown --flags in positional args don't crash
     args, unknown = parser.parse_known_args()
 
@@ -271,6 +267,9 @@ def main():
     progress_callback = _make_stderr_event_callback() if args.emit_events else None
 
     # ── Mode selection ───────────────────────────────────────────────────
+    if args.auto_answer is not False and args.mode == "raw":
+        parser.error("--auto-answer is available only in single-model --mode agent dispatch")
+
     if args.mode == "raw":
         return _run_raw_mode(args, unknown, progress_callback=progress_callback)
     else:
@@ -510,6 +509,13 @@ def _run_agent_mode(args, unknown, progress_callback: Optional[Callable] = None)
 
     # ── Comparison mode (multiple models) ──────────────────────────────
     if len(models_or_aliases) > 1:
+        if _auto_answer_enabled(args):
+            print(
+                "Error: --auto-answer is available only for single-model agent dispatch, "
+                "not comparison mode.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         results = dispatch_comparison(
             models_or_aliases, prompt, context, args.toolsets,
             args.max_turns, args.timeout, args.provider, args.thinking,
@@ -559,6 +565,75 @@ def _run_agent_mode(args, unknown, progress_callback: Optional[Callable] = None)
         cwd=getattr(args, 'cwd', None),
     )
 
+    auto_answer_enabled = _auto_answer_enabled(args)
+    auto_answers = []
+    rounds_used = 0
+    answer_model_arg = getattr(args, 'auto_answer', None)
+    answer_model = model if answer_model_arg is None else answer_model_arg
+
+    # A clarification is answered in the existing conversation so the dispatched
+    # agent retains its prior context. Never start a new session as a fallback:
+    # that would silently change the interaction contract.
+    while (
+        auto_answer_enabled
+        and r.get("content")
+        and r.get("error") is None
+        and is_question_shaped(r["content"])
+        and rounds_used < 2
+    ):
+        session_id = r.get("session_id")
+        if not session_id:
+            print(
+                "ask: clarification needs a human answer because the dispatched "
+                "agent did not provide a resumable session ID.",
+                file=sys.stderr,
+            )
+            break
+
+        generated = generate_auto_answer(
+            r["content"],
+            context=context,
+            answer_model=answer_model,
+            provider=args.provider,
+            timeout=args.timeout,
+            progress_callback=progress_callback,
+        )
+        answer = generated.get("answer")
+        if not answer:
+            print(
+                "ask: automatic clarification answer failed; a human answer is required: "
+                f"{generated.get('error', 'unknown error')}",
+                file=sys.stderr,
+            )
+            break
+
+        rounds_used += 1
+        event = {
+            "event": "auto_answer",
+            "question": r["content"],
+            "answer": answer,
+            "round": rounds_used,
+            "seam": "freetext",
+        }
+        auto_answers.append(event)
+        _safe_callback(progress_callback, event)
+
+        r = dispatch_single(
+            model, answer, "", args.toolsets,
+            args.max_turns, args.timeout, args.provider,
+            output_file=args.output,
+            resume_session=session_id,
+            alias=alias_key,
+            thinking=args.thinking,
+            progress_callback=progress_callback,
+            cwd=getattr(args, 'cwd', None),
+        )
+
+    if auto_answer_enabled:
+        # Ask is primarily a conversational CLI, but retain the audit data on
+        # its final dispatch result for programmatic callers and test seams.
+        r["auto_answers"] = auto_answers
+
     if r["content"]:
         if args.output:
             print(f"✅ {model} → {args.output} ({r['elapsed']:.1f}s, {len(r['content'])} chars)", file=sys.stderr)
@@ -572,6 +647,37 @@ def _run_agent_mode(args, unknown, progress_callback: Optional[Callable] = None)
     else:
         print(f"❌ {model}: {r['error']}", file=sys.stderr)
         sys.exit(1)
+
+    if (
+        auto_answer_enabled
+        and r.get("content")
+        and r.get("error") is None
+        and is_question_shaped(r["content"])
+    ):
+        print(
+            "ask: clarification still needs a human answer after automatic "
+            f"answering ({rounds_used}/2 rounds used).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+    # The CLI itself is conversational, but expose the final dispatch payload
+    # to programmatic callers so its auto-answer audit is not lost.
+    if auto_answer_enabled:
+        return r
+
+
+def _auto_answer_enabled(args) -> bool:
+    """Return whether argparse's optional auto-answer flag was explicitly set.
+
+    ``None`` represents the flag without an answer-model override; a string is
+    a caller-selected answer model. The narrow type check also keeps legacy
+    tests that pass sparse MagicMock argument objects on their historical path.
+    """
+    if not hasattr(args, "auto_answer"):
+        return False
+    value = args.auto_answer
+    return value is None or isinstance(value, str)
 
 
 if __name__ == "__main__":

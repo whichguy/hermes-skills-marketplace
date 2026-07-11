@@ -35,6 +35,7 @@ this as a subprocess. Do not duplicate dispatch logic elsewhere.
     python3 model_utils.py -m deepseek -p "What is ACID?" -o /tmp/out.md
 """
 
+import hashlib
 import json
 import os
 import re
@@ -43,14 +44,17 @@ import sys
 import threading
 import time
 import urllib.request
-from typing import Optional, Callable, TypedDict
+import unicodedata
+from typing import Optional, Callable, Literal, TypedDict
 
 # ── Dispatch event types ─────────────────────────────────────────────────────
 class DispatchEvent(TypedDict, total=False):
     """Typed dictionary for dispatch events emitted via progress_callback.
     
     Fields:
-        event: One of 'dispatch_start' | 'dispatch_end'.
+        event: One of 'dispatch_start' | 'dispatch_end' | 'fallback' |
+            'triage_done' | 'routing_decision' | 'dispatch_retry' |
+            'devloop_start' | 'devloop_end' | 'auto_answer'.
         model: The full model name being dispatched.
         role: Optional role label.
         thinking: Optional reasoning effort level.
@@ -59,6 +63,19 @@ class DispatchEvent(TypedDict, total=False):
         success: Whether dispatch succeeded (dispatch_end only).
         chars: Output character count (dispatch_end only).
         error: Error message if any (dispatch_end only).
+        notice: Fallback notice emitted by Hermes (fallback only).
+        category: Triage category (triage_done only).
+        confidence: Triage confidence (triage_done only).
+        skill: Routed skill name (routing_decision only).
+        toolsets: Routed toolset list (routing_decision only).
+        attempt: One-based failed dispatch attempt number (dispatch_retry only).
+        reason: Truncated retry reason (dispatch_retry only).
+        pipeline_mode: Devloop pipeline mode (devloop_start/devloop_end only).
+        terminal: Optional devloop terminal outcome (devloop_end only).
+        question: Clarifying question text (auto_answer only).
+        answer: Generated answer (auto_answer only).
+        round: One-based automatic answer round (auto_answer only).
+        seam: 'gate' or 'freetext' (auto_answer only).
     """
     event: str
     model: str
@@ -69,6 +86,19 @@ class DispatchEvent(TypedDict, total=False):
     success: bool
     chars: int
     error: Optional[str]
+    notice: Optional[str]
+    category: str
+    confidence: str
+    skill: Optional[str]
+    toolsets: Optional[str]
+    attempt: int
+    reason: str
+    pipeline_mode: str
+    terminal: Optional[str]
+    question: str
+    answer: str
+    round: int
+    seam: Literal["gate", "freetext"]
 
 # ── Safe callback helper ────────────────────────────────────────────────────
 
@@ -81,6 +111,13 @@ def _safe_callback(cb, event_dict):
             print(f"Warning: progress_callback raised: {e}", file=sys.stderr)
 
 
+def _make_stderr_event_callback() -> Callable:
+    """Create a progress callback that writes JSONL events to stderr."""
+    def _emit(event: dict):
+        print(json.dumps(event, default=str), file=sys.stderr, flush=True)
+    return _emit
+
+
 # ── Constants ──────────────────────────────────────────────────────────────
 # These are module-level so they can be patched in tests via mock.patch.
 
@@ -88,9 +125,132 @@ HERMES_BIN = os.environ.get("HERMES_BIN", "/opt/hermes/bin/hermes")
 DEFAULT_PROVIDER = "ollama-glm"
 DEFAULT_TIMEOUT = 3600  # 60 minutes — local models need more time
 DEFAULT_TOOLSETS = "file,web"
+DEFAULT_MAX_TURNS: Optional[int] = None  # None = defer to Hermes config (agent.max_turns)
 BITWARDEN_PREFIX = "Bitwarden Secrets Manager"
 SESSIONS_FILE = os.path.expanduser("~/.hermes/ask-sessions.json")
 SESSION_TTL = 3600  # 1 hour in seconds — sessions older than this are expired
+
+
+# ── Auto-answer helpers ────────────────────────────────────────────────────
+
+def answer_fp(text) -> str:
+    """Return a stable answer-artifact fingerprint.
+
+    Faithfully ported from
+    ``skills/autonomous-ai-agents/investigator/scripts/answerer.py`` so the
+    ask skill can use the artifact-beats-stdout capture pattern without a
+    cross-skill import cycle.
+    """
+    if text is None:
+        normalized = "\0none"
+    else:
+        source = str(text)
+        if source.isascii():
+            normalized = re.sub(r"[^a-z0-9]+", " ", source.lower()).strip()
+        else:
+            folded = unicodedata.normalize("NFKC", source).casefold()
+            normalized = " ".join(
+                "".join(ch if ch.isalnum() else " " for ch in folded).split()
+            )
+        if not normalized:
+            normalized = "\0empty:" + unicodedata.normalize("NFKC", source).casefold()
+    return hashlib.sha256(normalized.encode()).hexdigest()[:16]
+
+
+def answer_artifact_path(run_dir, qtext) -> str:
+    """Return the absolute per-question artifact path.
+
+    This is the artifact-beats-stdout path ported from
+    ``skills/autonomous-ai-agents/investigator/scripts/answerer.py``.
+    """
+    return os.path.abspath(os.path.join(run_dir, f"answer-{answer_fp(qtext)}.json"))
+
+
+def read_answer_artifact(path) -> Optional[str]:
+    """Read a non-empty ``answer`` string from an agent-written JSON artifact.
+
+    This is the artifact-beats-stdout reader ported from
+    ``skills/autonomous-ai-agents/investigator/scripts/answerer.py``. Missing,
+    malformed, and empty artifacts deliberately fall back to dispatcher stdout.
+    """
+    try:
+        with open(path, encoding="utf-8") as fh:
+            raw = fh.read()
+        try:
+            obj = json.loads(raw)
+        except (json.JSONDecodeError, ValueError) as exc:
+            print(f"[ask] warn: artifact invalid JSON at {path}: {exc}", file=sys.stderr,
+                  flush=True)
+            return None
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    answer = obj.get("answer") if isinstance(obj, dict) else None
+    return answer.strip() if isinstance(answer, str) and answer.strip() else None
+
+
+def answer_artifact_instruction(path) -> str:
+    """Build the agent instruction for the artifact-beats-stdout capture path.
+
+    Ported from ``skills/autonomous-ai-agents/investigator/scripts/answerer.py``.
+    """
+    return (f"\n\nWhen you have your final answer, ALSO write EXACTLY one JSON object to "
+            f'{path}: {{"answer": "<your 1-3 sentence answer, or NOT_FOUND: <reason>>"}}. '
+            "Write the file even for NOT_FOUND — then reply with the same answer.")
+
+
+def is_question_shaped(content) -> bool:
+    """Return whether a plain-text model reply is a likely clarifying question.
+
+    This deliberately cheap heuristic avoids treating generated code as a question:
+    it only accepts a stripped reply ending in ``?`` that contains no code fence.
+    """
+    return isinstance(content, str) and "```" not in content and content.strip().endswith("?")
+
+
+def generate_auto_answer(question_text, *, options=None, context="", answer_model,
+                         provider=DEFAULT_PROVIDER, timeout=DEFAULT_TIMEOUT, run_dir=None,
+                         progress_callback=None) -> dict:
+    """Ask a model to answer a clarifying question for the caller.
+
+    Artifact capture intentionally beats dispatcher stdout. A timed-out or
+    misclassified dispatcher result can still have a durable answer file written
+    by the agent, so that artifact is authoritative when present. Enum validation
+    is left to the seam which owns the corresponding gate contract.
+    """
+    question = str(question_text or "").strip()
+    option_list = list(options or [])
+    prompt = (
+        "You are answering a clarifying question on behalf of the caller. "
+        "Answer decisively and concisely; prefer the reversible/standard option.\n\n"
+        f"Clarifying question:\n{question}"
+    )
+    if option_list:
+        prompt += ("\n\nThe permitted enum options are listed verbatim below. "
+                   "Reply with EXACTLY one of them, preserving its spelling, and nothing "
+                   "else — no punctuation, quotes, explanation, or preamble such as Answer:.\n"
+                   + "\n".join(f"- {option}" for option in option_list))
+    if context:
+        prompt += f"\n\nAdditional caller context:\n{context}"
+
+    artifact = answer_artifact_path(run_dir, question) if run_dir else None
+    if artifact:
+        prompt += answer_artifact_instruction(artifact)
+
+    try:
+        result = dispatch_single(
+            resolve_alias(answer_model), prompt, "", "", None, timeout, provider,
+            progress_callback=progress_callback,
+        )
+    except Exception as exc:
+        return {"answer": None, "error": str(exc)}
+
+    answer = read_answer_artifact(artifact) if artifact else None
+    if answer is None:
+        content = result.get("content")
+        answer = content.strip() if isinstance(content, str) and content.strip() else None
+    if answer is not None:
+        return {"answer": answer, "error": None}
+    return {"answer": None, "error": result.get("error") or "empty response"}
 
 # Models that default to non-English output — auto-append "respond in English only"
 NON_ENGLISH_MODELS = {"glm-5.2:cloud", "glm-5.2", "glm-5.1:cloud"}
@@ -403,7 +563,7 @@ def get_reasoning_effort() -> str:
         - Caches result in module-level variable to avoid re-reading on every call.
         - Cache is reset by _invalidate_reasoning_effort_cache() (called by set_reasoning_effort).
     Dependencies:
-        - ~/.hermes/config.yaml (falls back to ${HERMES_HOME}/config.yaml).
+        - ~/.hermes/config.yaml (falls back to /opt/data/config.yaml).
         - System Python has no `yaml` module — uses manual regex/line parsing.
     # PERF: O(n) line scan on first call only — subsequent calls return cached value (~0ms).
     """
@@ -413,7 +573,7 @@ def get_reasoning_effort() -> str:
             return _reasoning_effort_cache
     config_path = os.path.expanduser("~/.hermes/config.yaml")
     if not os.path.exists(config_path):
-        config_path = "${HERMES_HOME}/config.yaml"
+        config_path = "/opt/data/config.yaml"
     try:
         with open(config_path) as f:
             in_agent = False
@@ -474,18 +634,22 @@ def set_reasoning_effort(level: str) -> bool:
 # ── Output cleaning ────────────────────────────────────────────────────────
 
 
-def clean_output(raw: str) -> tuple[str, Optional[str]]:
+def clean_output_full(raw: str) -> tuple[str, Optional[str], Optional[str]]:
     """Strip CLI noise from hermes chat output.
 
     Removes these line patterns:
     - "Bitwarden Secrets Manager ..." (secrets warning prefix)
     - "Warning: Unknown toolsets: ..." (toolset warnings)
     - "session_id: <id>" (extracted and returned separately)
+    - Hermes fallback notices containing "Primary auth failed" or
+      "Primary model failed" (first full notice line returned separately)
 
     Args:
         raw: Raw stdout or stderr from `hermes chat -q`.
     Returns:
-        Tuple of (cleaned_content, session_id). session_id is None if not found.
+        Tuple of (cleaned_content, session_id, fallback_notice). session_id and
+        fallback_notice are None if not found. fallback_notice preserves the full
+        original notice line, including any leading emoji.
     Side Effects: None — pure function, no I/O.
 
     # NOTE: When multiple session_id lines appear, the LAST one wins.
@@ -497,6 +661,7 @@ def clean_output(raw: str) -> tuple[str, Optional[str]]:
     lines = raw.split("\n") if raw else []
     kept = []
     session_id = None
+    fallback_notice = None
     for line in lines:
         if line.startswith(BITWARDEN_PREFIX):
             continue
@@ -506,8 +671,22 @@ def clean_output(raw: str) -> tuple[str, Optional[str]]:
         if sid_match:
             session_id = sid_match.group(1)
             continue
+        if "Primary auth failed" in line or "Primary model failed" in line:
+            if fallback_notice is None:
+                fallback_notice = line
+            continue
         kept.append(line)
-    return "\n".join(kept).strip(), session_id
+    return "\n".join(kept).strip(), session_id, fallback_notice
+
+
+def clean_output(raw: str) -> tuple[str, Optional[str]]:
+    """Strip CLI noise from hermes chat output, returning content and session ID.
+
+    This compatibility wrapper preserves the public two-tuple API. Fallback notices
+    are stripped from content; callers needing the notice should use clean_output_full.
+    """
+    content, session_id, _ = clean_output_full(raw)
+    return content, session_id
 
 
 # ── API error detection ────────────────────────────────────────────────────
@@ -767,12 +946,11 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
              tools will operate in this directory, so file writes go to the right place.
 
     Returns:
-        Dict with keys:
-            - content (str|None): The model's response, or None on error.
-            - session_id (str|None): Session ID if captured.
-            - elapsed (float): Wall-clock seconds.
-            - error (str|None): Error message if failed, None on success.
-            - thinking (str): The thinking level used (or "default").
+        Every return path returns a dict with keys content, session_id, elapsed,
+        error, thinking, and fallback. content is None iff error is not None. The
+        empty-output return path additionally carries returncode. Setup failures
+        before the subprocess boundary (role/prompt construction and the
+        set_reasoning_effort config mutation) raise rather than return a dict.
 
     Side Effects:
         - MUTATES global config if thinking is set (set → call → restore in finally).
@@ -837,11 +1015,15 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
             cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd
         )
         elapsed = time.time() - start
-        content, session_id = clean_output(result.stdout)
+        content, session_id, fallback = clean_output_full(result.stdout)
 
-        # Session ID may be in stderr (quiet mode puts it there)
+        # Session ID may be in stderr (quiet mode puts it there); parse stderr
+        # regardless so a fallback notice there is never lost.
+        _, stderr_session_id, stderr_fallback = clean_output_full(result.stderr)
         if not session_id:
-            _, session_id = clean_output(result.stderr)
+            session_id = stderr_session_id
+        if fallback is None:
+            fallback = stderr_fallback
 
         # FALLBACK: If --resume failed with "Session not found", retry fresh.
         # This handles stale session IDs in the registry from crashed/expired
@@ -864,15 +1046,24 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
                 fresh_cmd, capture_output=True, text=True, timeout=remaining_timeout, cwd=cwd
             )
             elapsed = time.time() - start
-            content, session_id = clean_output(result.stdout)
+            content, session_id, stdout_fallback = clean_output_full(result.stdout)
+            if fallback is None:
+                fallback = stdout_fallback
+            _, stderr_session_id, stderr_fallback = clean_output_full(result.stderr)
             if not session_id:
-                _, session_id = clean_output(result.stderr)
+                session_id = stderr_session_id
+            if fallback is None:
+                fallback = stderr_fallback
             resume_session = None  # Don't re-save to stale entry path
 
         # P1 fix: Detect API errors that hermes chat prints to stdout.
         # These look like content but are actually error messages (429, 500, etc).
         # Convert them to proper error returns so callers don't execute them as code.
         if content and is_api_error(content):
+            if fallback:
+                _safe_callback(progress_callback, {
+                    'event': 'fallback', 'model': model, 'notice': fallback,
+                })
             _safe_callback(progress_callback, {
                 'event': 'dispatch_end', 'model': model,
                 'elapsed': elapsed, 'success': False, 'chars': 0,
@@ -884,21 +1075,36 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
                 "elapsed": elapsed,
                 "error": f"API error: {content[:500]}",
                 "thinking": thinking or "default",
+                "fallback": fallback,
             }
 
         if not content:
+            empty_output_error = (
+                f"Empty output (exit {result.returncode}). stderr: {result.stderr[:500]}"
+            )
+            if fallback:
+                _safe_callback(progress_callback, {
+                    'event': 'fallback', 'model': model, 'notice': fallback,
+                })
             _safe_callback(progress_callback, {
                 'event': 'dispatch_end', 'model': model,
                 'elapsed': elapsed, 'success': False, 'chars': 0,
-                'error': f'Empty output. stderr: {result.stderr[:500]}',
+                'error': empty_output_error,
             })
             return {
                 "content": None,
                 "session_id": session_id,
                 "elapsed": elapsed,
-                "error": f"Empty output. stderr: {result.stderr[:500]}",
+                "error": empty_output_error,
+                "thinking": thinking or "default",
+                "fallback": fallback,
+                "returncode": result.returncode,
             }
 
+        if fallback:
+            _safe_callback(progress_callback, {
+                'event': 'fallback', 'model': model, 'notice': fallback,
+            })
         _safe_callback(progress_callback, {
             'event': 'dispatch_end', 'model': model,
             'elapsed': elapsed, 'success': True,
@@ -929,6 +1135,7 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
             "elapsed": elapsed,
             "error": None,
             "thinking": thinking or "default",
+            "fallback": fallback,
         }
     except subprocess.TimeoutExpired:
         _safe_callback(progress_callback, {
@@ -941,6 +1148,8 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
             "session_id": None,
             "elapsed": time.time() - start,
             "error": f"Timed out after {timeout}s",
+            "thinking": thinking or "default",
+            "fallback": None,
         }
     except Exception as e:
         _safe_callback(progress_callback, {
@@ -953,6 +1162,8 @@ def dispatch_single(model: str, prompt: str, context: str, toolsets: str,
             "session_id": None,
             "elapsed": time.time() - start,
             "error": str(e),
+            "thinking": thinking or "default",
+            "fallback": None,
         }
     finally:
         # Restore original reasoning effort — ALWAYS runs, even on error/timeout.
@@ -1071,7 +1282,7 @@ def main():
     parser.add_argument("-t", "--toolsets", default="", help="Comma-separated toolsets (e.g., file,web,terminal)")
     parser.add_argument("-s", "--skills", default="", help="Comma-separated skills to preload")
     parser.add_argument("--provider", default=DEFAULT_PROVIDER, help=f"Provider name (default: {DEFAULT_PROVIDER})")
-    parser.add_argument("--max-turns", type=int, default=None, help="Max agent turns (default: Hermes config)")
+    parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS, help="Max agent turns (default: Hermes config)")
     parser.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help=f"Timeout in seconds (default: {DEFAULT_TIMEOUT})")
     parser.add_argument("--english-only", action="store_true", help="Force 'respond in English only' directive (auto-added for known non-English models)")
     parser.add_argument("--thinking", choices=list(THINKING_LEVELS.keys()), help="Reasoning effort: none/minimal/low/medium/high/xhigh")

@@ -6,8 +6,10 @@ description: >
   follow-up questions. Comparison mode: "ask deepseek kimi <question>" dispatches
   multiple models in parallel. Each call is a full Hermes agent with tools and
   multi-turn reasoning. Replies inline with a model badge.
-version: 1.0.2
+version: 1.2.0
 author: agent
+license: Apache-2.0
+platforms: [linux, macos]
 metadata:
   hermes:
     tags: [multi-model, prompt, productivity, alias]
@@ -222,7 +224,8 @@ when serialization is active.
 
 > **TODO:** Once `hermes chat` supports `--reasoning-effort` as a per-call CLI
 > flag, the serialization workaround can be removed and comparison mode will
-> run in full parallel even with thinking levels.
+> run in full parallel even with thinking levels. Verified absent 2026-07-11,
+> blocked upstream — the serialization workaround documented here must stay.
 
 **Not all models support reasoning.** Cloud models (DeepSeek, GLM) and some
 local models (Qwen3, Gemma4) support it. The reasoning effort is silently
@@ -349,6 +352,69 @@ session_id: 20260627_120000_abc123
 | `--cwd` | Working directory for the dispatched agent (single model only; warns in comparison mode) |
 | `--emit-events` | Print JSON dispatch events to stderr for programmatic callers (e.g., `2>events.jsonl`) |
 
+## Invoking ask like an agent
+
+Use `--emit-events` when another program is supervising the call. Both
+`ask.py` and `pipeline.py` write one flushed JSON object per line to stderr;
+their result remains on stdout (the pipeline's full result is available with
+`--json`). The exit-code contract is: `0` success, `1` failure, `2`
+needs-human, and `10` raw suspended workflow. Exit `10` belongs to the
+resumable-script runtime; `gate_driver.py` converts an unanswered gate to `2`.
+
+The current event catalog is:
+
+| Event | Fields in addition to `event` |
+|---|---|
+| `dispatch_start` | `model`, `role`, `thinking`, `timestamp` |
+| `dispatch_end` | `model`, `elapsed`, `success`, `chars`, `error` |
+| `fallback` | `model`, `notice` |
+| `triage_done` | `category`, `confidence` |
+| `routing_decision` | `skill`, `model`, `thinking`, `toolsets` |
+| `dispatch_retry` | `attempt`, `reason` |
+| `devloop_start` | `pipeline_mode` |
+| `devloop_end` | `pipeline_mode`, `terminal` |
+| `auto_answer` | `question`, `answer`, `round`, `seam` |
+
+`dispatch_single()` removes Hermes fallback notices from content with
+`clean_output_full()` and returns the first such notice as `fallback` (also
+emitted as the `fallback` event). This matters for model comparisons: `hermes
+chat` can silently reroute a nonexistent or unavailable model tag and still
+answer with exit `0`. An `ask <bad-model-tag>` invocation can therefore appear
+to work while a different model answered. Check `fallback`, not only the exit
+code.
+
+The dispatch defaults are single-sourced in `model_utils.py`:
+`DEFAULT_PROVIDER`, `DEFAULT_TIMEOUT` (3600 seconds), `DEFAULT_TOOLSETS`, and
+`DEFAULT_MAX_TURNS`. `timeout` applies to each `dispatch_single()` subprocess
+attempt; pipeline retries can therefore consume up to `(max_retries + 1) ×
+timeout`. Empty output records `Empty output (exit N)` and a `returncode`; among
+empty outputs, only exit `0` is retryable. API, rate-limit, connection, and
+timeout errors are also transient retry candidates.
+
+`--auto-answer` is optional on both `ask.py` and `pipeline.py`. With no answer
+model argument, ask uses the selected model and pipeline uses the routed model.
+It recognizes free-text clarifying questions, generates at most two answers,
+and resumes the same session. Both retain an `auto_answers` audit list; an
+unanswered pipeline question is returned as `needs_human`, exit `2`, with a
+`pending_question`. The underlying answer helper gives an answer artifact
+precedence over dispatcher stdout when an artifact-capable caller provides one;
+the durable gate driver does so with its state directory.
+
+Durable resumable-script gates use the related `gate_driver.py` seam. Its
+sequence is run → raw exit `10` → inspect pending gate → answer an enum gate
+(case-insensitively normalized to the declared option, with one off-menu retry)
+→ resume. It returns `0` when completed, `2` for an unanswered/capped gate, and
+`1` for errors. For example:
+
+```bash
+python3 scripts/gate_driver.py --flow /tmp/flow.yaml --state-dir /tmp/flow-state \
+  --input '{"request":"ship it"}' --auto-answer --json --emit-events
+```
+
+Without `--auto-answer`, the driver performs the run/inspect portion and
+surfaces the pending gate as exit `2`; with it, the driver resumes using the
+enum-normalized answer and records an `auto_answer` event with `seam: "gate"`.
+
 ## Pitfalls
 
 ### Design Principle: Ask Is a Dumb Pipe — No Control Channel
@@ -357,10 +423,10 @@ The ask skill is a **dispatch primitive**, not an orchestrator. It takes a model
 alias + prompt, runs `hermes chat -q`, and returns the output. That's it.
 
 **Do NOT add:**
-- Control channels (file-based handoff, progress callbacks, event streams)
+- New orchestration control channels (file-based handoff or unbounded event/state machinery)
 - State machines or iteration loops
 - Phase-to-phase data passing via filesystem
-- Session continuity beyond the existing `--resume` mechanism
+- Session continuity beyond `--resume` and the bounded auto-answer continuation
 
 **Why:** A 3-seat advisor panel (DeepSeek + Kimi + Qwen, GLM synthesis) reviewed
 this question on 2026-06-28 and unanimously concluded: the control channel
@@ -375,11 +441,11 @@ to ask would:
 3. **Create maintenance burden** — every control-channel feature added to ask
    must be kept in sync with the SDLC implementation.
 
-**The right pattern:** Keep ask as a dumb pipe. When you need control-channel
-behavior (file-based handoff, progress tracking, multi-phase iteration), use
-the SDLC pipeline or build a new orchestrator that composes `ask` as a
-sub-component. The control channel lives at the orchestrator level, not the
-primitive level.
+**The right pattern:** Keep ask's supported invocation seams small
+(`--emit-events`, `--resume`, and bounded `--auto-answer`). When you need
+file-based handoff, multi-phase iteration, or richer orchestration, use the
+pipeline/devloop route or build an orchestrator that composes `ask` as a
+sub-component.
 
 This was the core finding of the 2026-06-28 control-channel review thread
 (planner → Kimi → Qwen → 3-seat advisor panel → 8 improvement proposals
@@ -388,11 +454,11 @@ deleted `sdlc_control.py`, added `--cwd` and `--emit-events` as simple CLI
 flags), while the SDLC orchestrator absorbed the control-channel complexity
 where it belongs.
 
-### SDLC Pipeline: All child processes get all tools (2026-06-29 policy)
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: All child processes get all tools (2026-06-29 policy)
 
 Per user policy, every dispatched child process in the SDLC pipeline gets full tool access (`toolsets='file,terminal,web'`). This reverses the earlier `toolsets=''` policy for text-output phases. The rationale: models should have the tools they need to do their job, and restricting tools caused more problems (empty output, inability to read files for context) than it solved. All v5 and v6 dispatch sites now use `toolsets='file,terminal,web'`: `implement`, `tech_docs`, `simplify_code`, `council_review`, `debug_cascade`, `plan`, `design_test_suites`, and all v6 state machine phases. The `max_turns` parameter still defers to Hermes config (`max_turns=None`).
 
-### SDLC Pipeline: extract_python_code() leniency → ast.parse() verification
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: extract_python_code() leniency → ast.parse() verification
 
 `extract_python_code()` in `sdlc.py` went through two rounds of fixes:
 
@@ -410,7 +476,7 @@ code. Edge cases covered by 9 tests in `TestExtractPythonCode` (P13-H):
 multiple blocks → largest valid, prose → None, API errors → None, invalid
 syntax → None, mixed valid/invalid → returns valid one.
 
-### SDLC Pipeline: implement_failed guard
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: implement_failed guard
 
 When `extract_python_code()` returned `None`, the pipeline reported
 `pipeline_status='success'` because `run_verification and extracted_code` was
@@ -419,13 +485,13 @@ falsy, skipping tests entirely. Fixed by adding an explicit guard: if
 `pipeline_status='implement_failed'` with error `'no extractable code from
 implement phase'`.
 
-### SDLC Pipeline: extract_python_code() takes first block, not largest
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: extract_python_code() takes first block, not largest
 
 Strategy 1 used `re.search` (first match only). Models may emit multiple
 ```python blocks (plan in one, code in another). Fixed by changing to
 `re.findall` + `max(blocks, key=len)` to return the largest block.
 
-### SDLC Pipeline: simplify_code() never re-tests simplified code
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: simplify_code() never re-tests simplified code
 
 `simplify_code()` runs after tests pass, but simplified code is **never
 re-tested**. If simplification breaks something, the pipeline reports success
@@ -434,7 +500,7 @@ that was never verified. Fix (P14-D): re-execute test suites against simplified
 code; revert to pre-simplification code on failure. Add
 `re_verify_after_simplify` param (default True).
 
-### SDLC Pipeline: council_review() partial failure handling
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: council_review() partial failure handling
 
 `council_review()` dispatches to 3 models in parallel. If one fails silently,
 the council result is incomplete but not flagged. Fix (P14-E): track per-seat
@@ -442,33 +508,35 @@ success/failure; mark result as 'partial' if some seats fail; include 'seats'
 list with per-model status. Pipeline should not fail on partial council
 (advisory only).
 
-### SDLC Pipeline: timeout for multi-phase SDLC mode
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: timeout for multi-phase SDLC mode
 
 Full 9-phase pipeline takes 324s (5.4 min) for a simple palindrome checker
 (P12-B). `run_pipeline()` timeout=3600s. Fix (P14-F): accept
 separate `pipeline_timeout` param (default 900s for SDLC mode); per-phase
 timeout stays at 120s.
 
-### SDLC Pipeline: AI-generated tests may have incorrect assertions
+### Test oracle for AI-generated assertions — resolved by devloop
 
-`design_test_suites()` generates test suites that the pipeline then runs against
-the generated code. But the AI can produce tests with **wrong expected values**.
-P12-C confirmed this: the generated test asserted `is_palindrome("Was it a car
-or a cat I saw")` is `False`, but it IS a palindrome (ignoring spaces). The
-pipeline "passed" because the code matched the wrong test. This is a test oracle
-problem — the pipeline validates code against tests, but nothing validates the
-tests themselves. Mitigation: council_review() should flag suspicious test
-assertions; consider adding a `validate_tests()` phase that sanity-checks
-generated test expectations against the problem description.
+This concern is resolved more strongly than the earlier proposed
+`validate_tests()` phase. Devloop's DoD oracle first runs
+`check_structural_coverage()` so every criterion owns a test, then uses
+`judge_assertions()` to have two independent judge models — neither the
+implementer — verify that each criterion's test set encodes it. A disagreement
+fails closed to `HUMAN_REVIEW` unless its optional tiebreaker resolves the split.
+The admitted tests are frozen while the coder works; the oracle may be replaced
+only through one bounded, re-admitted redesign cycle.
 
-### SDLC Pipeline: debug_cascade() doesn't pass original code to attempt 2
+Build and debug requests on the live, enabled `devloop_bridge` route inherit
+this oracle automatically.
+
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: debug_cascade() doesn't pass original code to attempt 2
 
 `debug_cascade()` passes `error_feedback` to attempt 2 (kimi), but doesn't
 include the original failed code. Kimi needs both to fix it. Fix (P14-G):
 include original code + error feedback in attempt 2 prompt with instruction
 "Fix the code above based on this error: ...".
 
-### SDLC Pipeline: AI-generated tests need linting too
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: AI-generated tests need linting too
 
 `design_test_suites()` generates test code that the pipeline runs against the
 generated implementation. But AI-generated tests can have the same style issues
@@ -480,7 +548,7 @@ re-verify). Returns `fixed_suites` dict with auto-fixed test code. Test syntax
 errors produce a warning but don't block the pipeline — pytest will fail and
 the debug cascade handles it. Discovered Jun 2026 during P14-H implementation.
 
-### SDLC Pipeline: tech_docs() returns None due to model non-determinism
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: tech_docs() returns None due to model non-determinism
 
 `tech_docs()` (and other text-output phases like `simplify_code()`) can return
 `None` content on some runs even when the same phase succeeded on a prior run.
@@ -492,7 +560,7 @@ should log a warning and continue rather than crashing. Tests should check for
 None and skip assertions gracefully rather than hard-failing. Discovered
 Jun 2026 during P12 live E2E re-runs.
 
-### SDLC Pipeline: pipeline.py overwrites SDLC status with dispatch_failed
+### Historical (sdlc.py era, retired 2026-07-01): SDLC Pipeline: pipeline.py overwrites SDLC status with dispatch_failed
 
 When `dispatch_result` contains an `sdlc_result` dict (meaning SDLC ran), the
 outer `run_pipeline()` was overwriting the SDLC's `pipeline_status` with
@@ -644,6 +712,55 @@ validation that would have caused production failures.
 Always use `--mode agent` for QA reviews. Raw mode is for classification and
 simple Q&A only.
 
+### DeepSeek Full-Codebase Audit
+
+For a comprehensive audit of an entire skill or codebase (not just specific
+files), dispatch DeepSeek at `--thinking high` with a structured audit prompt
+and file+terminal toolsets. The model reads every file in the directory and
+produces a structured report covering features, bugs, and documentation gaps.
+
+**When to use:** After building a new feature or making significant changes to a
+skill/codebase, a full audit catches bugs, missing tests, undocumented features,
+and documentation drift that file-by-file QA reviews miss.
+
+**Prompt template** for full-codebase audits:
+
+```bash
+python3 /opt/data/skills/productivity/ask/scripts/ask.py deepseek \
+    --prompt "You are auditing the <skill-name> skill at /opt/data/skills/<category>/<skill-name>/.
+Read ALL files in the directory — scripts/, tests/, SKILL.md, pyproject.toml, and any
+reference files. Produce a structured audit report with these sections:
+
+A. FEATURE INVENTORY — every function across all scripts, with file and line
+B. BUGS — any correctness issues, grouped by severity (HIGH/MEDIUM/LOW)
+C. DOCUMENTATION GAPS — features in code but missing from SKILL.md
+D. TEST COVERAGE GAPS — functions with no test coverage
+E. CONFIGURATION ISSUES — missing dependencies, wrong paths, stale references
+
+For each finding, note the file, line reference, severity, and a one-sentence fix.
+If a section has no issues, write 'No issues found.' Be concise but thorough.
+Only report real issues — no style nitpicks." \
+    --thinking high --timeout 300 --toolsets file,terminal \
+    -o /tmp/<skill-name>-audit.md
+```
+
+**Performance:** ~84s for a 10-file, 200-test skill (USAW event info, 2026-07-11).
+DeepSeek at `--thinking high` produced a thorough 37-function inventory with only
+1 MEDIUM bug and 13 LOW observations — the codebase was clean.
+
+**After the audit:**
+1. Read the report (`read_file /tmp/<skill-name>-audit.md`)
+2. Fix any HIGH/MEDIUM bugs immediately
+3. Add missing tests for uncovered functions
+4. Update SKILL.md with undocumented features and test counts
+5. Commit everything with THESIS/LEARNINGS/REFERENCES citing the audit
+
+**Why DeepSeek, not Kimi or Qwen:** DeepSeek V4 Pro at `--thinking high` produces
+the most thorough codebase-level analysis — it reads every file, cross-references
+functions across modules, and catches documentation drift. Kimi is better for
+targeted code review of specific files; DeepSeek is better for holistic audits
+that require understanding the full codebase architecture.
+
 ### QA Fix Workflow
 
 After a QA review surfaces issues, follow this pattern (demonstrated Jun 2026
@@ -708,6 +825,9 @@ inherits whatever `agent.reasoning_effort` is set to (or the model's default).
 **Pattern:** `Optional[X] = None` → omit flag/config mutation when None →
 Hermes config wins. Only hardcode parameters that have NO Hermes config key
 (e.g., `timeout` as a safety net, `toolsets` as a per-role access control).
+
+`timeout` applies to each dispatch attempt. With retries, the pipeline dispatch stage
+can take up to `(max_retries+1) × timeout` wall-clock time.
 
 **Audit technique:** When the user flags one hardcoded parameter, audit ALL
 parameters across ALL dispatch sites in ALL files — not just the one they
@@ -1050,64 +1170,47 @@ cd /opt/data/skills/productivity/ask && uv run --with pytest python3 -m pytest t
 cd /opt/data/skills/productivity/ask && uv run --with pytest python3 -m pytest tests/test_ask.py::TestNeedsNoThink -v
 ```
 
-**Tests:** 148 in test_ask.py + 24 in test_routing.py + 82 in test_pipeline.py + 123 in test_sdlc.py (mock) + 10 in test_pipeline_e2e.py (live). 17 live tests require Ollama running (11 test_ask + 6 test_pipeline). All mock tests pass in ~1.2s.
+**Tests (340 pytest-collected):** 166 in `test_ask.py`, 17 in
+`test_contract.py`, 6 in `test_gate_driver.py`, 116 in `test_pipeline.py`, 11
+in `test_pipeline_e2e.py`, and 24 in `test_routing.py`. The opt-in,
+shell-driven live corner-case suite is separate: `tests/live/TEST_PLAN.md`
+defines its eleven LC cases and `tests/live/run_live_suite.sh` runs them and
+appends dated results to that plan. It exists because it caught a real
+0700-working-directory `PermissionError` platform bug and an enum-normalization
+gap.
 
-### SDLC Pipeline Architecture
+### Pipeline Architecture
 
-The ask skill is part of a 3-stage pipeline for routing user messages to the right model:
+The retired `sdlc.py` 11-phase engine was removed on 2026-07-01. The live
+pipeline is deliberately smaller:
 
 ```
-User Message
+User message
     │
     ▼
-┌──────────────┐
-│  triage.py   │  ~0.5s — Direct Ollama API, classifies into 11 categories
-│  (gemma4:12b)│  Returns: {category, confidence, raw_output, tokens, elapsed_first, elapsed_retry}
-└──────┬───────┘
-       │
-       ▼
-┌──────────────┐
-│ routing.py    │  ~0ms — Maps category → {skill, model, thinking, toolsets}
-│              │  Uses ROUTING_TABLE (11 categories) + COST_TIERS + model selection
-└──────┬───────┘
-       │
-       ├──→ ask.py (agent mode)     — query_model, explain_concept
-       ├──→ sdlc.py (test-first)    — build_code → plan→test-suites→implement→lint→run→council
-       ├──→ sdlc.py (cascade)       — debug_code → qwen-coder→kimi fallback
-       ├──→ advisors.py (consensus) — research_info
-       └──→ None (handle directly)   — urgent_action, general_chat, status_check
-              │
-              ▼
-┌──────────────┐
-│ model_utils  │  Core dispatch: hermes chat -q subprocess
-│ dispatch_    │  Session management, aliases, thinking levels, atomic writes
-│ single()     │  Stale session fallback, thread-safe cache, /no_think prefix
-└──────────────┘
+triage.py → routing.py → single dispatch
+                     └→ devloop via devloop_bridge (test_first / debug_cascade)
 ```
 
-**Entry points:** `triage.py` → `routing.py` → `ask.py` / `sdlc.py` / `advisors.py`
+`triage.py` classifies the request and `routing.py` selects the skill, model,
+thinking level, toolsets, and (where applicable) pipeline mode. Ordinary
+routable work reaches `dispatch_single()`; build and debug modes use a live,
+enabled `devloop_bridge` route instead.
+
+That devloop handoff is an intentional fail-closed three-way split:
+
+- If importing `devloop_bridge` failed, a `test_first` or `debug_cascade`
+  request receives a failed `dispatch_result` and exit `1`; it must not
+  silently degrade to an unverified single-shot answer.
+- If `DEVLOOP_ENABLED=0`, the operator-selected kill-switch intentionally
+  clears the pipeline mode and uses ordinary single-shot dispatch.
+- If devloop is live and enabled, `test_first` calls
+  `devloop_bridge.call_guarded(devloop_bridge.run_build, ...)` and
+  `debug_cascade` calls
+  `devloop_bridge.call_guarded(devloop_bridge.run_debug, ...)`, both with the
+  scratch workspace. Their outcome is classified by devloop's shared classifier.
 
 **11 categories:** query_model, build_code, debug_code, research_info, urgent_action, general_chat, deploy_code, write_docs, config_change, status_check, explain_concept
-
-**SDLC pipeline (build_code) — 11 phases:**
-
-```
-Phase 1:   plan (GLM)
-Phase 2:   design_test_suites (DeepSeek, 3 suites: unit/integration/e2e)
-Phase 3:   implement (Qwen-coder)
-Phase 3.5: lint_code (multi-linter: ruff --fix --unsafe-fixes → pyflakes → mypy, all via venv binaries)
-Phase 3.6: lint_test_suites (lint each test suite individually, auto-fix, return fixed_suites)
-Phase 4:   run_test_suites (fail-fast, uses fixed code + fixed tests)
-Phase 5:   debug_cascade (qwen-coder→kimi, full context: suite name + stdout + stderr)
-Phase 6:   tech_docs pass 1 (qwen-coder, thinking=low)
-Phase 7:   simplify_code → re-verify tests → revert if broken (P14-D)
-Phase 8:   tech_docs pass 2 (qwen-coder, thinking=low)
-Phase 9:   council_review (3-model: DeepSeek + Kimi + GLM, thinking=high, quorum: success/partial/failed)
-```
-
-Docs phases gated behind `run_docs=True` (default). Lint phases auto-fix style issues in both generated code AND generated tests. `pipeline_timeout=900s` default (P14-F). `extract_python_code()` uses `ast.parse()` for syntax verification (P14-A-2). Council uses quorum model with `status` field (P14-E). Simplify re-verifies tests and reverts on failure (P14-D). Debug cascade passes full test context (P14-G).
-
-**Debug cascade (debug_code):** qwen3-coder-next:q4_K_M (primary) → kimi-k2.7-code:cloud (fallback, only if primary fails)
 
 **Cost tiers:**
 | Budget | Models | Use case |
@@ -1117,6 +1220,7 @@ Docs phases gated behind `run_docs=True` (default). Lint phases auto-fix style i
 | `medium` | deepseek, minimax | Mid-tier cloud |
 | `high` | deepseek, kimi | Multi-model consensus |
 
+- `references/lean-dispatch.md` — Slim Hermes agent: `--ignore-rules` + limited toolsets for ~40% speedup (Jul 2026)
 - `references/local-model-turn-benchmarks.md` — Per-model turn times and practical max-turn recommendations (Jun 2026)
 - `references/fuzzy-alias-resolution.md` — Two-tier fuzzy alias resolution: architecture, prompt design, API, test coverage (Jun 2026)
 - `scripts/ask.py` — The improved prompt script with aliases, sessions, comparison mode, --mode raw, and --clean-sessions

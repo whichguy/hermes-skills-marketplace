@@ -28,14 +28,13 @@ through the SDLC to produce working code (or a correct response).
 | EdgeCases              | Mocked  | Real    | Mocked    | ✅   |
 """
 
+import inspect
 import json
 import os
 import subprocess
 import sys
-import time
 import unittest
-from pathlib import Path
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -46,11 +45,10 @@ TRIAGE_SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", 
 sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, TRIAGE_SCRIPTS)
 
-import pipeline
-import routing
-import triage
-from routing import route, COST_TIERS, ROUTING_TABLE
-from model_utils import dispatch_single, dispatch_comparison
+import pipeline  # noqa: E402
+import model_utils  # noqa: E402
+from routing import route, ROUTING_TABLE  # noqa: E402
+from model_utils import dispatch_single, dispatch_comparison  # noqa: E402
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -88,7 +86,7 @@ def _fake_dispatch(content="Here is your response.", elapsed=1.2, error=None):
 # single-dispatch fallback. Do NOT null pipeline.devloop_bridge: bridge-is-None now means
 # "import broke" and FAILS CLOSED (fail-closed three-way split, deep review 2026-07-01) instead of
 # silently degrading. Live tests (TestPipelineDispatchLive) re-enable for real E2E testing.
-import os as _os
+import os as _os  # noqa: E402
 _orig_devloop_enabled = _os.environ.get('DEVLOOP_ENABLED')
 _os.environ['DEVLOOP_ENABLED'] = '0'
 
@@ -241,6 +239,108 @@ class TestPipelineTriageRoutingChain(unittest.TestCase):
 
 # ── Test Class 2: Dispatch Mocked (verify dispatch_single is called correctly) ─
 
+class TestConfigDefaults(unittest.TestCase):
+    """Verify pipeline defaults are sourced from model_utils."""
+
+    def test_run_pipeline_defaults_match_model_utils(self):
+        defaults = inspect.signature(pipeline.run_pipeline).parameters
+        self.assertEqual(defaults["timeout"].default, model_utils.DEFAULT_TIMEOUT)
+        self.assertEqual(defaults["max_turns"].default, model_utils.DEFAULT_MAX_TURNS)
+
+    @patch("pipeline.dispatch_single", return_value=_fake_dispatch())
+    @patch("pipeline.triage.classify", return_value=_fake_triage("query_model"))
+    def test_progress_callback_emits_pipeline_events_and_reaches_dispatch(
+            self, mock_triage, mock_dispatch):
+        """Pipeline events precede dispatch and the same callback reaches dispatch_single."""
+        events = []
+
+        def callback(event):
+            events.append(event)
+
+        pipeline.run_pipeline("What is ACID?", progress_callback=callback)
+
+        self.assertEqual(
+            [event["event"] for event in events],
+            ["triage_done", "routing_decision"],
+        )
+        self.assertIs(mock_dispatch.call_args.kwargs["progress_callback"], callback)
+
+    @patch("pipeline.time.sleep")
+    @patch("pipeline.dispatch_single", return_value=_fake_dispatch(
+        content=None, error="API error: 429 rate limit"))
+    @patch("pipeline.triage.classify", return_value=_fake_triage("query_model"))
+    def test_progress_callback_emits_retry_event(
+            self, mock_triage, mock_dispatch, mock_sleep):
+        """A transient first attempt emits a one-based dispatch_retry event."""
+        events = []
+
+        pipeline.run_pipeline(
+            "What is ACID?", max_retries=1, progress_callback=events.append)
+
+        retries = [event for event in events if event["event"] == "dispatch_retry"]
+        self.assertEqual(len(retries), 1)
+        self.assertEqual(retries[0]["attempt"], 1)
+        self.assertIn("429", retries[0]["reason"])
+
+    def test_dry_run_progress_callback_emits_only_pipeline_events(self):
+        """Synthetic dry-run triage still reports the two completed pipeline stages."""
+        events = []
+
+        pipeline.run_pipeline("x", dry_run=True, progress_callback=events.append)
+
+        self.assertEqual(
+            [event["event"] for event in events],
+            ["triage_done", "routing_decision"],
+        )
+
+    @patch("pipeline.time.sleep")
+    @patch("pipeline.dispatch_single")
+    @patch("pipeline.triage.classify", return_value=_fake_triage("build_code"))
+    def test_transient_dispatch_retries_are_bounded(self, mock_triage, mock_dispatch, mock_sleep):
+        mock_dispatch.return_value = {
+            "content": None, "session_id": None, "elapsed": 0.1,
+            "error": "API error: 429 rate limit",
+        }
+
+        result = pipeline.run_pipeline("Build a REST API", max_retries=2)
+
+        self.assertEqual(mock_dispatch.call_count, 3)
+        self.assertEqual(result["dispatch_retries"], 2)
+        self.assertTrue(result["dispatch_result"]["retried"])
+
+    @patch("pipeline.time.sleep")
+    @patch("pipeline.dispatch_single")
+    @patch("pipeline.triage.classify", return_value=_fake_triage("build_code"))
+    def test_exit_zero_empty_output_retries(self, mock_triage, mock_dispatch, mock_sleep):
+        mock_dispatch.return_value = {
+            "content": None, "session_id": None, "elapsed": 0.1,
+            "error": "Empty output (exit 0). stderr: ", "returncode": 0,
+            "thinking": "default",
+        }
+
+        result = pipeline.run_pipeline("Build a REST API")
+
+        self.assertEqual(mock_dispatch.call_count, 2)
+        self.assertTrue(result["dispatch_result"]["retried"])
+        self.assertEqual(result["pipeline_status"], "dispatch_failed")
+
+    @patch("pipeline.time.sleep")
+    @patch("pipeline.dispatch_single")
+    @patch("pipeline.triage.classify", return_value=_fake_triage("build_code"))
+    def test_nonzero_exit_empty_output_does_not_retry(self, mock_triage, mock_dispatch, mock_sleep):
+        mock_dispatch.return_value = {
+            "content": None, "session_id": None, "elapsed": 0.1,
+            "error": "Empty output (exit 2). stderr: usage: ...", "returncode": 2,
+            "thinking": "default",
+        }
+
+        result = pipeline.run_pipeline("Build a REST API")
+
+        mock_dispatch.assert_called_once()
+        self.assertEqual(result["pipeline_status"], "dispatch_failed")
+        self.assertEqual(result["dispatch_retries"], 0)
+
+
 class TestPipelineDispatchMocked(unittest.TestCase):
     """Verify dispatch_single is called with the right args and outputs flow back.
 
@@ -313,6 +413,7 @@ class TestPipelineDispatchMocked(unittest.TestCase):
         self.assertIsNotNone(result["dispatch_result"]["error"])
         self.assertIn("Timed out", result["dispatch_result"]["error"])
 
+
     @patch("pipeline.dispatch_single")
     @patch("pipeline.triage.classify", return_value=_fake_triage("build_code"))
     def test_custom_toolsets_override(self, mock_triage, mock_dispatch):
@@ -331,6 +432,47 @@ class TestPipelineDispatchMocked(unittest.TestCase):
         kwargs = mock_dispatch.call_args.kwargs
         self.assertEqual(kwargs["max_turns"], 10)
         self.assertEqual(kwargs["timeout"], 120)
+
+
+class TestPipelineAutoAnswer(unittest.TestCase):
+    """Free-text clarification handling stays bounded and session-scoped."""
+
+    def test_question_round_cap_returns_needs_human(self):
+        question = {
+            "content": "Which database do you prefer?",
+            "session_id": "s1",
+            "elapsed": 0.1,
+            "error": None,
+            "thinking": "low",
+        }
+        events = []
+
+        with patch("pipeline.triage.classify", return_value=_fake_triage("query_model")), \
+             patch("pipeline.dispatch_single", return_value=question) as mock_dispatch, \
+             patch(
+                 "pipeline.generate_auto_answer",
+                 side_effect=[
+                     {"answer": "PostgreSQL", "error": None},
+                     {"answer": "Use the standard deployment.", "error": None},
+                 ],
+             ), \
+             patch("pipeline.routing.log_pipeline_event"):
+            result = pipeline.run_pipeline(
+                "Design the data layer",
+                auto_answer=True,
+                progress_callback=events.append,
+            )
+
+        self.assertEqual(mock_dispatch.call_count, 3)
+        self.assertEqual(mock_dispatch.call_args_list[1].kwargs["resume_session"], "s1")
+        self.assertEqual(result["pipeline_status"], "needs_human")
+        self.assertEqual(result["pipeline_exit_code"], 2)
+        self.assertIsNone(result["error"])
+        self.assertEqual(result["pending_question"], "Which database do you prefer?")
+        self.assertEqual(len(result["auto_answers"]), 2)
+        self.assertEqual(
+            len([event for event in events if event["event"] == "auto_answer"]), 2,
+        )
 
 
 # ── Test Class 3: Live Dispatch (opt-in) ──────────────────────────────────────
@@ -560,6 +702,197 @@ class TestPipelineErrorPaths(unittest.TestCase):
 
 # ── Test Class 6: CLI and Output ──────────────────────────────────────────────
 
+class TestDevloopOutcomeSeam(unittest.TestCase):
+    """Ask must consume devloop's shared outcome classification without reinterpretation."""
+
+    def _run_devloop(self, dispatch_result):
+        classifier = pipeline.devloop_bridge.classify_outcome
+        bridge = MagicMock()
+        bridge.SCRATCH = object()
+        bridge.devloop_enabled.return_value = True
+        bridge.call_guarded.return_value = dispatch_result
+        bridge.classify_outcome.side_effect = classifier
+
+        with patch("pipeline.triage.classify", return_value=_fake_triage("build_code")), \
+             patch.object(pipeline, "devloop_bridge", bridge), \
+             patch("routing.log_pipeline_event") as mock_log:
+            result = pipeline.run_pipeline("Build a REST API")
+
+        bridge.classify_outcome.assert_called_once_with(
+            dispatch_result, requested_keep_branch=False)
+        return result, mock_log
+
+    def test_enabled_devloop_never_degrades_to_single_dispatch(self):
+        """A live test_first route must reach call_guarded, never dispatch_single."""
+        classifier = pipeline.devloop_bridge.classify_outcome
+        bridge = MagicMock()
+        bridge.SCRATCH = object()
+        bridge.devloop_enabled.return_value = True
+        bridge.call_guarded.return_value = {
+            "content": "Merged devloop result", "error": None,
+            "devloop_result": {
+                "terminal": "COMPLETE", "merged": True, "delivery_mode": "merged",
+            },
+        }
+        bridge.classify_outcome.side_effect = classifier
+        routing_decision = {
+            "skill": "dev", "model": "deepseek", "thinking": "high",
+            "toolsets": "file,web", "role": None, "pipeline": "test_first",
+        }
+
+        with patch("pipeline.triage.classify", return_value=_fake_triage("build_code")), \
+             patch("pipeline.routing.route", return_value=routing_decision), \
+             patch.object(pipeline, "devloop_bridge", bridge), \
+             patch("pipeline.dispatch_single") as mock_dispatch:
+            result = pipeline.run_pipeline("Build a REST API")
+
+        self.assertTrue(result["pipeline_success"])
+        bridge.call_guarded.assert_called_once_with(
+            bridge.run_build, "Build a REST API", timeout=3600, repo=bridge.SCRATCH)
+        mock_dispatch.assert_not_called()
+
+    def test_missing_devloop_bridge_fails_closed(self):
+        """A test_first route must fail rather than silently single-dispatch on import loss."""
+        routing_decision = {
+            "skill": "dev", "model": "deepseek", "thinking": "high",
+            "toolsets": "file,web", "role": None, "pipeline": "test_first",
+        }
+        with patch("pipeline.triage.classify", return_value=_fake_triage("build_code")), \
+             patch("pipeline.routing.route", return_value=routing_decision), \
+             patch.object(pipeline, "devloop_bridge", None), \
+             patch("pipeline.dispatch_single") as mock_dispatch:
+            result = pipeline.run_pipeline("Build a REST API")
+
+        self.assertEqual(result["pipeline_status"], "dispatch_failed")
+        self.assertEqual(result["pipeline_exit_code"], 1)
+        self.assertIsNotNone(result["error"])
+        self.assertIn("devloop unavailable", result["error"])
+        mock_dispatch.assert_not_called()
+
+    def test_merged_complete_is_success_everywhere(self):
+        dispatch = {
+            "content": "Merged devloop result", "error": None,
+            "devloop_result": {
+                "terminal": "COMPLETE", "merged": True, "delivery_mode": "merged",
+            },
+        }
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertTrue(result["pipeline_success"])
+        self.assertEqual(result["pipeline_status"], "success")
+        self.assertIsNone(result["error"])
+        self.assertEqual(result["pipeline_exit_code"], 0)
+        self.assertTrue(mock_log.call_args.kwargs["success"])
+
+    def test_human_review_is_needs_human_not_success(self):
+        dispatch = {
+            "content": "Human decision required", "error": None,
+            "devloop_result": {"terminal": "HUMAN_REVIEW", "needs_human": True},
+        }
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertFalse(result["pipeline_success"])
+        self.assertEqual(result["pipeline_status"], "needs_human")
+        self.assertIsNone(result["error"])
+        self.assertEqual(result["pipeline_exit_code"], 2)
+        self.assertFalse(mock_log.call_args.kwargs["success"])
+
+    def test_merge_degradation_is_delivery_failed(self):
+        dispatch = {
+            "content": "Complete, but branch was not delivered", "error": None,
+            "devloop_result": {
+                "terminal": "COMPLETE", "merged": False,
+                "kept_branch": "devloop/run-123", "delivery_mode": "none",
+                "merge_reason": "merge failed",
+            },
+        }
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertFalse(result["pipeline_success"])
+        self.assertEqual(result["pipeline_status"], "delivery_failed")
+        self.assertEqual(result["error"], "merge failed")
+        self.assertEqual(result["pipeline_exit_code"], 1)
+        self.assertFalse(mock_log.call_args.kwargs["success"])
+
+    def test_missing_terminal_is_dispatch_failed(self):
+        dispatch = {"content": "malformed result", "error": None, "devloop_result": {}}
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertFalse(result["pipeline_success"])
+        self.assertEqual(result["pipeline_status"], "dispatch_failed")
+        self.assertEqual(result["error"], "devloop did not complete")
+        self.assertEqual(result["pipeline_exit_code"], 1)
+        self.assertFalse(mock_log.call_args.kwargs["success"])
+
+    def test_runtime_crash_remains_dispatch_failed(self):
+        dispatch = {
+            "content": "devloop crashed: boom", "error": "devloop crashed: boom",
+            "devloop_result": {"terminal": "HUMAN_REVIEW", "reason": "boom"},
+        }
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertFalse(result["pipeline_success"])
+        self.assertEqual(result["pipeline_status"], "dispatch_failed")
+        self.assertEqual(result["error"], "devloop crashed: boom")
+        self.assertEqual(result["pipeline_exit_code"], 1)
+        self.assertFalse(mock_log.call_args.kwargs["success"])
+
+    def test_already_satisfied_goal_metadata_is_preserved(self):
+        goal = {
+            "status": "achieved", "attempt_count": 1, "max_attempts": 3,
+            "plan_path": "/tmp/goal/PLAN.json",
+            "lessons_path": "/tmp/goal/LESSONS.jsonl",
+            "journal_warning": None,
+            "attempts": [{"name": "goal-p1-a1", "terminal": "COMPLETE",
+                          "retryable": False, "delivery_mode": "already_satisfied"}],
+        }
+        dispatch = {
+            "content": "Target already satisfies the verified goal", "error": None,
+            "devloop_result": {
+                "terminal": "COMPLETE", "delivery_mode": "already_satisfied",
+                "already_satisfied": True, "merged": False, "goal": goal,
+            },
+        }
+
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertTrue(result["pipeline_success"])
+        self.assertEqual(result["pipeline_exit_code"], 0)
+        self.assertEqual(result["dispatch_result"]["devloop_result"]["goal"], goal)
+        self.assertTrue(mock_log.call_args.kwargs["success"])
+
+    def test_goal_cap_exhaustion_is_needs_human_not_last_attempt_error(self):
+        attempts = [
+            {"name": f"goal-p1-a{i}", "terminal": "HUMAN_REVIEW",
+             "retryable": True, "reason": "implementation evidence stayed red"}
+            for i in range(1, 4)
+        ]
+        dispatch = {
+            "content": "Three autonomous attempts exhausted; human review required",
+            "error": None,
+            "devloop_result": {
+                "terminal": "HUMAN_REVIEW", "needs_human": True,
+                "reason": "autonomous attempt cap exhausted",
+                "goal": {
+                    "status": "blocked", "attempt_count": 3, "max_attempts": 3,
+                    "plan_path": "/tmp/goal/PLAN.json",
+                    "lessons_path": "/tmp/goal/LESSONS.jsonl",
+                    "journal_warning": None, "attempts": attempts,
+                },
+            },
+        }
+
+        result, mock_log = self._run_devloop(dispatch)
+
+        self.assertFalse(result["pipeline_success"])
+        self.assertEqual(result["pipeline_status"], "needs_human")
+        self.assertEqual(result["pipeline_exit_code"], 2)
+        self.assertIsNone(result["error"])
+        self.assertEqual(
+            result["dispatch_result"]["devloop_result"]["goal"]["attempts"], attempts)
+        self.assertFalse(mock_log.call_args.kwargs["success"])
+
+
 class TestPipelineCLIAndOutput(unittest.TestCase):
     """Test the pipeline CLI subprocess interface."""
 
@@ -597,13 +930,34 @@ class TestPipelineCLIAndOutput(unittest.TestCase):
         r = self._run(["test", "--dry-run", "--json"])
         data = json.loads(r.stdout)
         expected_keys = {"message", "triage_result", "routing_decision",
-                         "dispatch_result", "pipeline_elapsed", "pipeline_success", "error"}
+                         "dispatch_result", "pipeline_elapsed", "pipeline_success", "error",
+                         "pipeline_exit_code"}
         self.assertTrue(expected_keys.issubset(data.keys()))
 
     def test_cli_no_message_errors(self):
         """No message argument should cause argparse error."""
         r = self._run([])
         self.assertNotEqual(r.returncode, 0)
+
+    def test_main_uses_classified_pipeline_exit_code(self):
+        """The CLI must preserve devloop's 0/2/1 terminal contract."""
+        for status, exit_code in (("success", 0), ("needs_human", 2),
+                                  ("delivery_failed", 1), ("dispatch_failed", 1)):
+            result = {
+                "pipeline_success": exit_code == 0,
+                "pipeline_status": status,
+                "pipeline_exit_code": exit_code,
+                "error": None if status in ("success", "needs_human") else "failed",
+                "triage_result": {}, "routing_decision": {}, "dispatch_result": None,
+                "pipeline_elapsed": 0.0,
+            }
+            with self.subTest(status=status), \
+                 patch("pipeline.run_pipeline", return_value=result), \
+                 patch.object(sys, "argv", ["pipeline.py", "Build it", "--json"]), \
+                 patch("builtins.print"):
+                with self.assertRaises(SystemExit) as exited:
+                    pipeline.main()
+                self.assertEqual(exited.exception.code, exit_code)
 
 
 # ── Test Class 7: Event Logging ──────────────────────────────────────────────
@@ -773,7 +1127,6 @@ class TestStaleSessionFallback(unittest.TestCase):
     @patch("model_utils._remove_session")
     def test_stale_session_triggers_fresh_retry(self, mock_remove, mock_run):
         """When stderr contains 'Session not found', dispatch retries without --resume."""
-        import model_utils
 
         call_count = [0]
         def side_effect(cmd, **kwargs):
@@ -1282,13 +1635,14 @@ class TestPipelineE2EMocked(unittest.TestCase):
 
     def test_mocked_e2e_prompt_augmentation(self):
         """P3: Verify the dispatch prompt was augmented for dev skill."""
-        result = self._run_mocked_pipeline(
+        self._run_mocked_pipeline(
             "Build a palindrome checker",
             _CANNED_PALINDROME,
         )
         # P3: dev skill should get prompt augmentation
         # We can verify this by checking that dispatch was called with augmented prompt
-        with patch("pipeline.dispatch_single") as mock_dispatch:
+        with patch("pipeline.triage.classify", return_value=_fake_triage("build_code")), \
+             patch("pipeline.dispatch_single") as mock_dispatch:
             mock_dispatch.return_value = {
                 "content": _CANNED_PALINDROME, "session_id": "x",
                 "elapsed": 0.1, "error": None, "thinking": "default",
