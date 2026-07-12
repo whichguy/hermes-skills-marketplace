@@ -6,7 +6,7 @@ This is an opt-in, live control-plane/data-plane validation suite for the `ask` 
 
 ## How to run
 
-From this directory, run `bash run_live_suite.sh [LC-ids...]`. With no IDs, it runs all eleven cases in LC1–LC11 order. For example, `bash run_live_suite.sh LC1 LC3` runs only those cases.
+From this directory, run `bash run_live_suite.sh [LC-ids...]`. With no IDs, it runs all twelve cases in registry order, with LC10b immediately after LC10. For example, `bash run_live_suite.sh LC1 LC3` runs only those cases.
 
 The runner writes JSONL progress records to stderr and a final PASS/FAIL table to stdout. It exits `0` when every non-flaky case passed, `1` when a non-flaky case failed, `2` for an unknown LC ID/usage error, and `10` when an environment precondition fails (for example, the `hermes` container is not running).
 
@@ -228,6 +228,18 @@ The heredoc flow explicitly directs the first turn to emit exactly `{"ask": {"pr
 
 **Flakiness and scope.** Live prompt obedience is the sensitivity. Off-menu enum handling/escalation is out of scope here and remains covered by mocked unit tests.
 
+## LC10b — deterministic stubbed durable gate wiring
+
+**Purpose.** Must-pass companion to LC10 that exercises the same gate-raised → auto-answered → resumed → completed wiring without depending on live model enum obedience.
+
+**Preconditions.** Same mounted prompt-runtime and PyYAML requirements as LC10. The runner writes `/tmp/stub-lc10b.sh` and a distinct `/tmp/gd-lc10b.yaml`; `HERMES_BIN` is exported before `gate_driver.py` starts so `model_utils` reads the stub at module import time.
+
+**Invocation.** The runner invokes `gate_driver.py` with `--state-dir /tmp/gd-lc10b --auto-answer fast --json --emit-events --timeout 15`. The POSIX-sh stub scans `"$@"` for the opaque value immediately following `-q`: it returns the gate JSON on the initial workflow turn, exactly `approved` for `generate_auto_answer`'s permitted-enum prompt, and a final summary when the resumed prompt contains `untrusted_human_response`.
+
+**Expected control plane.** Exit `0`; JSON has `status == "completed"`, exactly one `auto_answers` entry whose answer is `approved` or `denied`, and stderr JSONL has an `auto_answer` event with `seam: "gate"`.
+
+**Flakiness and scope.** None: LC10b is deterministic and must pass. LC10 remains the separately flaky-annotated live-model coverage.
+
 ## LC11 — output robustness
 
 **Purpose.** Ensure output cleaning preserves Unicode and ordinary prose that merely resembles a control message, while retaining a long answer.
@@ -363,3 +375,15 @@ The runner appends a dated block below after each real execution. The initial sc
 | LC9 | PASS | 57 | free-text auto-answer completed; round-cap sub-check observed exit 2 |
 | LC10 | FAIL | 67 | expected exit 0, got 2;status expected completed, got needs_human;auto_answers length expected 1, got 0;recorded gate answer not an allowed enum;missing gate auto_answer JSONL event;gate auto_answer event missing question;gate auto_answer event missing answer;gate auto_answer event missing round;gate auto_answer event seam expected gate |
 | LC11 | FAIL | 21 | expected exit 0, got 1;emoji/unicode first line was not preserved;control-like ordinary prose was stripped or changed;long numbered list did not reach item 20 |
+
+### 2026-07-11T17:22:36-07:00
+
+| Case | Result | Seconds | Detail |
+| --- | --- | ---: | --- |
+| LC10b | PASS | 0 | completed deterministic durable gate with approved |
+
+### 2026-07-11T17:22:36-07:00
+
+| Case | Result | Seconds | Detail |
+| --- | --- | ---: | --- |
+| LC10b | PASS | 0 | completed deterministic durable gate with approved |

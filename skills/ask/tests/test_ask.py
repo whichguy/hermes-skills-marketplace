@@ -15,6 +15,7 @@ Tests are organized in groups:
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -34,6 +35,14 @@ import ask
 import model_utils
 
 HERMES_BIN = os.environ.get("HERMES_BIN", "hermes")
+# Key the guard on the binary the tests actually invoke — model_utils.HERMES_BIN
+# (default /opt/hermes/bin/hermes), NOT the bare "hermes" default above. In the
+# container that full path exists (tests run) while bare "hermes" is not on PATH;
+# keying on the latter would wrongly skip these tests in-container too.
+_HERMES_AVAILABLE = shutil.which(model_utils.HERMES_BIN) is not None
+requires_hermes = unittest.skipUnless(
+    _HERMES_AVAILABLE, "requires the hermes binary (container-only)"
+)
 ASK_SCRIPT = os.path.join(os.path.dirname(__file__), "..", "scripts", "ask.py")
 
 # Import model_utils for mocking purposes
@@ -235,6 +244,7 @@ class TestThinkingLevels(unittest.TestCase):
         result = get_reasoning_effort()
         self.assertIsInstance(result, str)
 
+    @requires_hermes
     def test_set_reasoning_effort_valid(self):
         """Test setting and restoring reasoning effort."""
         original = get_reasoning_effort()
@@ -475,7 +485,7 @@ class TestDryRunDispatch(unittest.TestCase):
         mock_result.stderr = ""
         mock_run.return_value = mock_result
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False, encoding="utf-8") as f:
             tmpfile = f.name
 
         try:
@@ -483,7 +493,7 @@ class TestDryRunDispatch(unittest.TestCase):
                 "test-model", "test", "", "", 1, 10, "test",
                 output_file=tmpfile, thinking="xhigh"
             )
-            with open(tmpfile) as f:
+            with open(tmpfile, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("thinking: xhigh", content)
         finally:
@@ -616,6 +626,7 @@ class TestLiveDispatch(unittest.TestCase):
         self.assertEqual(original, restored, "Reasoning effort was not restored after call")
 
 
+@requires_hermes
 class TestTriageDryRun(unittest.TestCase):
     """Test triage.py --dry-run — fast, no API."""
 
@@ -786,14 +797,14 @@ class TestSessionManagement(unittest.TestCase):
     def test_get_session_corrupt_json(self):
         import model_utils as mu_module
         # Write corrupt JSON to the sessions file
-        with open(mu_module.SESSIONS_FILE, "w") as f:
+        with open(mu_module.SESSIONS_FILE, "w", encoding="utf-8") as f:
             f.write("{corrupt json!!!")
         self.assertEqual(get_session("anything"), {})
 
     def test_save_session_handles_corrupt_existing(self):
         import model_utils as mu_module
         # Write corrupt JSON, then save should still work
-        with open(mu_module.SESSIONS_FILE, "w") as f:
+        with open(mu_module.SESSIONS_FILE, "w", encoding="utf-8") as f:
             f.write("{corrupt")
         save_session("test", "model", "sid", "prompt")
         info = get_session("test")
@@ -970,7 +981,7 @@ class TestCLICombinations(unittest.TestCase):
     def test_context_file_flag(self):
         """--context-file reads context from file."""
         import tempfile
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False, encoding="utf-8") as f:
             f.write("This is context")
             ctx_file = f.name
         try:
@@ -1029,7 +1040,7 @@ class TestGetReasoningEffortEdgeCases(unittest.TestCase):
     def test_agent_section_without_reasoning_effort(self):
         """Config with agent: section but no reasoning_effort key."""
         import tempfile
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False, encoding="utf-8") as f:
             f.write("agent:\n  max_turns: 90\n  verbose: false\n")
             tmpfile = f.name
         try:
@@ -1082,12 +1093,12 @@ class TestLiveEndToEnd(unittest.TestCase):
     def test_cli_file_output(self):
         """Verify -o writes file with metadata header."""
         import tempfile
-        with tempfile.NamedTemporaryFile(mode="r", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="r", suffix=".md", delete=False, encoding="utf-8") as f:
             tmpfile = f.name
         try:
             r = self._run_cli(["fast", "What is 5+5?", "-o", tmpfile, "--timeout", "30"])
             self.assertEqual(r.returncode, 0)
-            with open(tmpfile) as f:
+            with open(tmpfile, encoding="utf-8") as f:
                 content = f.read()
             self.assertIn("model:", content)
             self.assertIn("elapsed:", content)
@@ -1416,7 +1427,7 @@ class TestCleanExpiredSessions(unittest.TestCase):
         import json as _json
         import time as _time
         old_ts = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(_time.time() - 7200))
-        with open(mu_module.SESSIONS_FILE, "w") as f:
+        with open(mu_module.SESSIONS_FILE, "w", encoding="utf-8") as f:
             _json.dump({
                 "fresh": {"model": "m", "session_id": "s1", "prompt_preview": "p", "timestamp": _time.strftime("%Y-%m-%d %H:%M:%S")},
                 "stale": {"model": "m", "session_id": "s2", "prompt_preview": "p", "timestamp": old_ts},
@@ -1430,7 +1441,7 @@ class TestCleanExpiredSessions(unittest.TestCase):
         import json as _json
         import time as _time
         old_ts = _time.strftime("%Y-%m-%d %H:%M:%S", _time.localtime(_time.time() - 7200))
-        with open(mu_module.SESSIONS_FILE, "w") as f:
+        with open(mu_module.SESSIONS_FILE, "w", encoding="utf-8") as f:
             _json.dump({
                 "old1": {"model": "m", "session_id": "s1", "prompt_preview": "p", "timestamp": old_ts},
                 "old2": {"model": "m", "session_id": "s2", "prompt_preview": "p", "timestamp": old_ts},
@@ -1450,7 +1461,7 @@ class TestCleanExpiredSessions(unittest.TestCase):
     def test_corrupt_file_returns_zero(self):
         """Corrupt JSON — should return 0."""
         import model_utils as mu_module
-        with open(mu_module.SESSIONS_FILE, "w") as f:
+        with open(mu_module.SESSIONS_FILE, "w", encoding="utf-8") as f:
             f.write("{corrupt json!!!")
         removed = clean_expired_sessions()
         self.assertEqual(removed, 0)
@@ -1459,7 +1470,7 @@ class TestCleanExpiredSessions(unittest.TestCase):
         """Sessions with invalid timestamps are treated as expired."""
         import model_utils as mu_module
         import json as _json
-        with open(mu_module.SESSIONS_FILE, "w") as f:
+        with open(mu_module.SESSIONS_FILE, "w", encoding="utf-8") as f:
             _json.dump({
                 "bad_ts": {"model": "m", "session_id": "s1", "prompt_preview": "p", "timestamp": "not-a-date"},
             }, f)

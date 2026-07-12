@@ -3,6 +3,7 @@
 import os
 import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 
@@ -39,6 +40,44 @@ class TestCanonicalOption(unittest.TestCase):
         for answer, expected in cases.items():
             with self.subTest(answer=answer):
                 self.assertEqual(gate_driver._canonical_option(answer, options), expected)
+
+
+class TestLiveModelsWiring(unittest.TestCase):
+    @patch("model_utils.dispatch_single")
+    def test_worker_never_dispatches_from_durable_state_dir(self, dispatch_single):
+        dispatch_single.return_value = {
+            "content": "ok", "session_id": None, "elapsed": 0.1, "error": None,
+        }
+        state_dir = "/some/state/dir"
+        cases = [
+            (SimpleNamespace(model=None, provider=None),
+             gate_driver.resolve_alias("deepseek"), gate_driver.DEFAULT_PROVIDER),
+            (SimpleNamespace(model="test-model", provider="test-provider"),
+             "test-model", "test-provider"),
+        ]
+
+        for artifact, expected_model, expected_provider in cases:
+            with self.subTest(model=artifact.model, provider=artifact.provider):
+                models = gate_driver._live_models(artifact, state_dir, 30)
+
+                self.assertEqual(models.worker_identity, expected_model)
+                self.assertEqual(models.provider_identity, expected_provider)
+                self.assertEqual(models.worker([{"role": "user", "content": "hi"}]), "ok")
+
+                call = dispatch_single.call_args
+                self.assertEqual(
+                    call.args,
+                    (expected_model, "user: hi", "", "all", None, 30, expected_provider),
+                )
+                self.assertNotIn("cwd", call.kwargs)
+                self.assertNotIn(state_dir, call.args)
+
+        dispatch_single.return_value = {
+            "content": None, "session_id": None, "elapsed": 0.1, "error": "boom",
+        }
+        models = gate_driver._live_models(cases[0][0], state_dir, 30)
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            models.worker([{"role": "user", "content": "hi"}])
 
 
 class TestDrive(unittest.TestCase):

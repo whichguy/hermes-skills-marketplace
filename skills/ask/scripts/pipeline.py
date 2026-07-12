@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
-"""pipeline — SDLC pipeline wrapper: triage → routing → dispatch → output.
+"""pipeline — triage → routing → dispatch pipeline wrapper.
 
-Chains the three-stage skill ecosystem into a single CLI entry point:
+Chains the live devloop-era flow into a single CLI entry point:
 1. triage.py classifies the user message into one of 11 categories (~0.5s)
 2. routing.py maps the category to a dispatch decision (skill, model, thinking)
-3. ask.py dispatches the model via hermes chat -q (or handles inline)
+3. dispatch either uses dispatch_single for one model or delegates build_code/
+   debug_cascade decisions to devloop_bridge for a reviewable branch summary
+
+The legacy sdlc.py 11-phase execution engine was retired on 2026-07-01;
+triage and routing remain active, while devloop handles build/debug requests.
 
 # Architecture
-    User message → triage.classify() → routing.route() → dispatch → output
-                         ↓                    ↓              ↓
-                    Ollama API          COST_TIERS      model_utils
-                    (gemma4:12b)        ROUTING_TABLE   dispatch_single
+    User message → triage.classify() → routing.route() → {single dispatch | devloop} → output
+                         ↓                    ↓                    ↓
+                    Ollama API          COST_TIERS      dispatch_single | devloop_bridge
+                    (gemma4:12b)        ROUTING_TABLE   reviewable branch summary
 
 # Usage
     # Auto-route a message through the full pipeline
@@ -52,10 +56,11 @@ from model_utils import (  # noqa: E402
     generate_auto_answer, is_question_shaped,
 )
 
-# devloop is the SDLC engine for build_code/debug_cascade (the legacy sdlc.* engine was retired after
+# devloop is the engine for build_code/debug_cascade (the legacy sdlc.* engine was retired after
 # the go/no-go spike: 88% auto-solve, 0 false-completes). Imported defensively — the tree-local devloop
-# dir is resolved relative to this file; if it can't load (devloop_bridge=None) build/debug fall through
-# to a single model dispatch. DEVLOOP_ENABLED is a kill-switch that DEFAULTS ON; set it 0 to disable.
+# dir is resolved relative to this file; if it can't load (devloop_bridge=None), build/debug produces a
+# FAILED dispatch result rather than silently falling through to single-model dispatch. DEVLOOP_ENABLED
+# is a kill-switch that DEFAULTS ON; set it 0 to disable for the one intentional single-shot fallback.
 devloop_bridge = None
 DEVLOOP_IMPORT_ERROR = None
 try:
@@ -497,7 +502,7 @@ def iterate(message: str, error_feedback: str,
 
 
 def main():
-    """CLI entry point for the SDLC pipeline.
+    """CLI entry point for the pipeline.
 
     Usage:
         python3 pipeline.py "Build a REST API"
@@ -506,7 +511,7 @@ def main():
         python3 pipeline.py "hello" --json
     """
     parser = argparse.ArgumentParser(
-        description="pipeline — SDLC pipeline: triage → routing → dispatch"
+        description="pipeline — triage → routing → dispatch pipeline"
     )
     parser.add_argument('message', help='Message to classify, route, and dispatch')
     parser.add_argument('--cost-budget', choices=['free', 'low', 'medium', 'high'],

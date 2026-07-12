@@ -1224,6 +1224,6 @@ That devloop handoff is an intentional fail-closed three-way split:
 - `references/local-model-turn-benchmarks.md` — Per-model turn times and practical max-turn recommendations (Jun 2026)
 - `references/fuzzy-alias-resolution.md` — Two-tier fuzzy alias resolution: architecture, prompt design, API, test coverage (Jun 2026)
 - `scripts/ask.py` — The improved prompt script with aliases, sessions, comparison mode, --mode raw, and --clean-sessions
-- `scripts/pipeline.py` — SDLC pipeline wrapper: triage → routing → dispatch. CLI entry point with --dry-run, --json, --cost-budget modes
+- `scripts/pipeline.py` — triage → routing → {single dispatch | devloop} pipeline. CLI entry point with --dry-run, --json, --cost-budget modes
 - `scripts/model_utils.py` — Shared utilities: build_prompt(), dispatch_single(), clean_expired_sessions(), SESSION_TTL
 - `scripts/routing.py` — Triage-to-dispatch routing layer with cost tiers, LRU caching, and pipeline event logging

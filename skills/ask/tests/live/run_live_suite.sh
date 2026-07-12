@@ -10,7 +10,7 @@ LC10_TIMEOUT="${LC10_TIMEOUT:-90}"  # per-model timeout; 30s starves cold hermes
 LC7_MODEL_2="${LC7_MODEL_2:-fast}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PLAN_FILE="${SCRIPT_DIR}/TEST_PLAN.md"
-ALL_CASES=(LC1 LC2 LC3 LC4 LC5 LC6 LC7 LC8 LC9 LC10 LC11)
+ALL_CASES=(LC1 LC2 LC3 LC4 LC5 LC6 LC7 LC8 LC9 LC10 LC10b LC11)
 RESULT_IDS=()
 RESULT_STATES=()
 RESULT_SECONDS=()
@@ -18,7 +18,7 @@ RESULT_DETAILS=()
 HAVE_JQ=0
 
 usage() {
-    printf 'Usage: %s [LC1 ... LC11]\n' "${0##*/}" >&2
+    printf 'Usage: %s [LC1 ... LC10 LC10b LC11]\n' "${0##*/}" >&2
 }
 
 emit_progress() {
@@ -190,7 +190,7 @@ join_problems() {
 
 clean_container_paths() {
     # These paths are owned exclusively by this suite; ignore cleanup failures.
-    docker exec "$CONTAINER" sh -c 'rm -rf /tmp/gd-lc10 /tmp/gd-lc10.yaml /tmp/stub-lc3.sh /tmp/stub-lc4.sh /tmp/stub-lc5.sh /tmp/ask-sessions.lc6.backup /tmp/ask-sessions.lc6.had-file /tmp/ask-live-suite-sessions.backup /tmp/ask-live-suite-sessions.had-file' >/dev/null 2>&1 || true
+    docker exec "$CONTAINER" sh -c 'rm -rf /tmp/gd-lc10 /tmp/gd-lc10.yaml /tmp/gd-lc10b /tmp/gd-lc10b.yaml /tmp/stub-lc3.sh /tmp/stub-lc4.sh /tmp/stub-lc5.sh /tmp/stub-lc10b.sh /tmp/ask-sessions.lc6.backup /tmp/ask-sessions.lc6.had-file /tmp/ask-live-suite-sessions.backup /tmp/ask-live-suite-sessions.had-file' >/dev/null 2>&1 || true
 }
 
 read_effort() {
@@ -511,6 +511,42 @@ YAML
     json_nonempty "$out" result || problems+=("missing final workflow result payload")
     docker exec "$CONTAINER" rm -rf /tmp/gd-lc10 /tmp/gd-lc10.yaml >/dev/null 2>&1 || true
     if ((${#problems[@]})); then record_result LC10 FAIL "$elapsed" "$(join_problems "${problems[@]}")"; else record_result LC10 PASS "$elapsed" "completed one durable gate with ${answer}"; fi
+}
+
+lc10b() {
+    local out="$RUN_TMP/lc10b.json" err="$RUN_TMP/lc10b.err" start rc elapsed answer count
+    local -a problems=()
+    start=$SECONDS
+    docker exec "$CONTAINER" sh -c "printf '%s\\n' '#!/bin/sh' 'prompt=' 'previous=' 'for arg in \"\$@\"; do' '  if [ \"\$previous\" = \"-q\" ]; then' '    prompt=\$arg' '    break' '  fi' '  previous=\$arg' 'done' 'case \"\$prompt\" in' '  *untrusted_human_response*)' '    echo \"Demo approved. Workflow complete.\"' '    exit 0' '    ;;' 'esac' 'case \"\$prompt\" in' '  *\"Approve this demo\"*)' '    case \"\$prompt\" in' '      *\"permitted enum options\"*|*\"- approved\"*|*\"- denied\"*)' '        echo approved' '        exit 0' '        ;;' '    esac' '    ;;' 'esac' 'echo \"{\\\"ask\\\": {\\\"prompt\\\": \\\"Approve this demo?\\\", \\\"options\\\": [\\\"approved\\\", \\\"denied\\\"]}}\"' > /tmp/stub-lc10b.sh && chmod 700 /tmp/stub-lc10b.sh" >/dev/null 2>&1
+    docker exec -i "$CONTAINER" sh -c 'cat > /tmp/gd-lc10b.yaml' <<'YAML' >/dev/null 2>&1
+workflow: lc10b-stub-gate
+version: 1
+description: A deterministic stubbed approval gate for the ask live suite.
+needs:
+  - Run one approval demonstration.
+returns:
+  - A final summary after approval input.
+steps:
+  - id: approval
+    prompt: |
+      On your first turn, reply with EXACTLY this JSON object and nothing else:
+      {"ask": {"prompt": "Approve this demo?", "options": ["approved", "denied"]}}
+      After the caller's answer arrives, produce a concise final summary that states the selected answer. Do not ask another question.
+YAML
+    run_in_container "$out" "$err" env HERMES_BIN=/tmp/stub-lc10b.sh "$GATE_PYTHON" "$ASK_SCRIPTS/gate_driver.py" --flow /tmp/gd-lc10b.yaml \
+        --state-dir /tmp/gd-lc10b --auto-answer fast --json --emit-events --timeout 15
+    rc=$?
+    count=$(json_length "$out" auto_answers 2>/dev/null || true)
+    answer=$(json_value "$out" auto_answers.0.answer 2>/dev/null || true)
+    elapsed=$((SECONDS - start))
+    (( rc == 0 )) || problems+=("expected exit 0, got ${rc}")
+    [[ "$count" == 1 ]] || problems+=("auto_answers length expected 1, got ${count:-unreadable}")
+    [[ "$answer" == approved || "$answer" == denied ]] || problems+=("recorded gate answer not an allowed enum")
+    json_equal "$out" status completed || problems+=("status expected completed, got ${JSON_OBSERVED}")
+    event_has "$err" auto_answer || problems+=("missing gate auto_answer JSONL event")
+    event_field_equal "$err" auto_answer seam gate || problems+=("gate auto_answer event seam expected gate")
+    docker exec "$CONTAINER" rm -rf /tmp/stub-lc10b.sh /tmp/gd-lc10b /tmp/gd-lc10b.yaml >/dev/null 2>&1 || true
+    if ((${#problems[@]})); then record_result LC10b FAIL "$elapsed" "$(join_problems "${problems[@]}")"; else record_result LC10b PASS "$elapsed" "completed deterministic durable gate with ${answer}"; fi
 }
 
 lc11() {
