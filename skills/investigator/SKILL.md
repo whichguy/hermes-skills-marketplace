@@ -255,10 +255,16 @@ hermes skills install whichguy/hermes-skills-marketplace/skills/next-best-questi
 hermes skills install whichguy/hermes-skills-marketplace/skills/investigator --category autonomous-ai-agents
 ```
 
-## Verification
+## Local-change gate
 
-- Loop logic + journal + artifacts (no network): `python3 tests/test_iterate.py` (55 tests).
-- Live (in container): `python3 scripts/iterate.py --problem "<task>"` produces a final response;
-  `--capability read` confirms down-scoping (and produces no `answer-*.json`); interrupt a
-  `--run-dir` run after one tombstone and re-run to confirm resume (`n_resumed` > 0).
-- End-to-end A/B harness: `evals/validate_wrapper.py` (baseline vs wrapper, blind-judged).
+Canonical contract: `~/.grok/skills/test-harness/references/gate-snippet.md` + `local-change-gate.md`.
+
+```bash
+bash "$HOME/.grok/skills/test-harness/scripts/run-harness.sh" \
+  --repo "$HOME/.hermes/skills/autonomous-ai-agents/investigator"
+```
+
+Require `PASS_CLEAN` or `PASS_CLEAN_SCOPED`. Paste `chat-card.md`. Green suite exit alone is **not** sufficient.
+
+**Inner suite** (discovered): `python3 tests/run.py` (hermetic / fast)  
+**Residual** (not RESULT): live iterate · `evals/validate_wrapper.py` and other eval drivers

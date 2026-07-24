@@ -117,21 +117,20 @@ Summarize what was resolved vs what remains, then let the user approve the impro
 
 ## Verification
 
-Run the offline and stubbed wrapper suite alone:
+**Required local-change gate** (after edits to this package):
 
 ```bash
-bash ~/.claude/skills/investigate-plan/tests/run_investigator.test.sh
+bash "$HOME/.grok/skills/test-harness/scripts/run-harness.sh" \
+  --repo "$HOME/.claude/skills/investigate-plan"
+# or absolute: …/grok-build-additions/claude/skills/investigate-plan
 ```
 
-Run all related suites, optionally including the live Docker tier:
+Require `test-harness RESULT=PASS_CLEAN` or `PASS_CLEAN_SCOPED`. Paste `chat-card.md`; point at
+`report.html`. Green suite exit alone is **not** sufficient; do not freehand porcelain audits.
 
-```bash
-bash ~/.claude/skills/investigate-plan/tests/run.sh
-bash ~/.claude/skills/investigate-plan/tests/run.sh live
-```
+**Inner suite** (what harness discovers): `bash tests/run_investigator.test.sh`
 
-Run the hook suite directly:
+**Residual** (not part of RESULT):
 
-```bash
-bash ~/.claude/hooks/plan-unknowns-gate.test.sh
-```
+- `bash tests/run.sh live` (Docker tier)
+- Hook suite (if editing the gate): `bash ~/.claude/hooks/plan-unknowns-gate.test.sh`

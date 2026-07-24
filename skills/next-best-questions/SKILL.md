@@ -292,12 +292,16 @@ python3 ${HERMES_SKILL_DIR}/evals/run_evals.py --case reverse-string --json
 Weak runs are expected to fail (e.g. `fast` + 1 round on a hard problem); stronger generation
 (`--gen-model glm --max-rounds 2`) should clear the bar. That two-sided behavior is the point.
 
-## Verification Checklist
+## Local-change gate
 
-- [ ] `python3 -m py_compile scripts/*.py evals/*.py` passes.
-- [ ] `uv run --with pytest python3 -m pytest tests/ -v -k "not live"` is green (pure logic + adjudicator logic).
-- [ ] `--dry-run` prints all four stage prompts (confirms `model_utils` import + builders).
-- [ ] With Ollama up, a live run on a vague problem returns a ranked bucket and a "pre-answer" list.
-- [ ] A deliberately well-specified problem yields a small/empty bucket with the "well-specified" note.
-- [ ] `evals/run_evals.py` rates the well-specified case acceptable (bucket≈0) and flags shallow runs.
-- [ ] Frontmatter validates (starts at byte 0 with `---`, has `name` + `description`).
+Canonical contract: `~/.grok/skills/test-harness/references/gate-snippet.md` + `local-change-gate.md`.
+
+```bash
+bash "$HOME/.grok/skills/test-harness/scripts/run-harness.sh" \
+  --repo "$HOME/.hermes/skills/autonomous-ai-agents/next-best-questions"
+```
+
+Require `PASS_CLEAN` or `PASS_CLEAN_SCOPED`. Paste `chat-card.md`. Green suite exit alone is **not** sufficient.
+
+**Inner suite** (discovered): `python3 tests/run.py` (fast/basic hermetic)  
+**Residual** (not RESULT): live Ollama / `--dry-run` / `evals/run_evals.py` / frontmatter checks
