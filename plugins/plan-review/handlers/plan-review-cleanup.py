@@ -6,10 +6,11 @@ and worktree-assessment sentinels so the next plan-mode session starts fresh.
 Companion to the plan review PreToolUse gates. Slug is derived from
 tool_input.planFilePath, matching the gates.
 
-Scoped to the plan review gate sentinels only. The `.review-ready-<slug>`
-sentinel is owned by review-plan / the plugin's own ExitPlanMode cleanup
-(which renames it to `.exited-<slug>` for idempotent re-exit) — deleting it
-here would break that. Fails silently — cleanup must never disrupt anything.
+Scoped to the investigation and worktree sentinels listed in KINDS, and
+nothing else. The `.review-ready-<slug>` sentinel this used to work around
+was retired 2026-07-26 together with exit-plan-mode-cleanup.sh, which owned
+it — nothing writes or reads it now, so there is no longer anything to avoid
+here. Fails silently — cleanup must never disrupt anything.
 """
 
 import json

@@ -16,7 +16,11 @@ import subprocess
 import sys
 import tempfile
 
-CODEX_TIMEOUT_S = 150  # keep below the hook timeout in hooks.json (180)
+# Keep below this handler's hook timeout in hooks.json (900). Unlike the
+# detached review worker — which caps its reviewer seats at nothing — this gate
+# runs inside PreToolUse and blocks ExitPlanMode, so it must terminate. 840
+# leaves 60s for the handler to emit its decision before the hook is killed.
+CODEX_TIMEOUT_S = 840
 MAX_SECTION_CHARS = 8000  # cap on Codex output embedded in a message/reason
 PLANS_DIR = os.environ.get("CLAUDE_PLANS_DIR") or os.path.expanduser("~/.claude/plans")
 INVESTIGATE_TAG = "[investigate]"
