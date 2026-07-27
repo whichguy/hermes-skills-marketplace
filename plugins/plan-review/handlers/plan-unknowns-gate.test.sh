@@ -68,15 +68,15 @@ printf '## Open Unknowns\n- **thing** — matters. *Resolve:* probe it. %s\n' "$
 CXEOF
 chmod +x "$CX/codex"
 
-# Stage 1: review gate. rev plan has heading + no [investigate] -> Stages 2/3 pass.
+# Clean pass: heading present + no [investigate] -> both stages allow.
+# (The former review-sentinel stage was removed 2026-07-26; that question is
+# owned by plan-oversight/soft_exit.py. CLAUDE_PLAN_REQUIRE_REVIEW no longer
+# has any effect here, so it is asserted to be inert rather than dropped.)
 mkplan rev '# P\n\nsteps\n\n## Open Unknowns\nNone.'
-pf rev | CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o";                       check s1-soft-allow      allow "$(outcome $T/o)"
-pf rev | CLAUDE_PLANS_DIR="$PL" CLAUDE_PLAN_REQUIRE_REVIEW=1 "$G" > "$T/o"; check s1-hard-deny  deny  "$(decision $T/o)"
-touch "$PL/.review-ready-rev"
-pf rev | CLAUDE_PLANS_DIR="$PL" CLAUDE_PLAN_REQUIRE_REVIEW=1 "$G" > "$T/o"; check s1-hard-satisfied allow "$(outcome $T/o)"
-rm -f "$PL/.review-ready-rev"
+pf rev | CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o";                       check clean-allow        allow "$(outcome $T/o)"
+pf rev | CLAUDE_PLANS_DIR="$PL" CLAUDE_PLAN_REQUIRE_REVIEW=1 "$G" > "$T/o"; check require-review-inert allow "$(outcome $T/o)"
 
-# Stage 2: codex tags [investigate] -> needs-investigation sentinel written + deny
+# Stage 1: codex tags [investigate] -> needs-investigation sentinel written + deny
 mkplan nh '# P\n\njust steps, no audit'
 pf nh | PATH="$CX:/usr/bin:/bin" CX_TAG='[investigate]' CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"
 check s2-agentic-deny deny "$(decision $T/o)"
@@ -144,14 +144,17 @@ check s2-ending-tag-deny deny "$(decision $T/o)"
 check s2-ending-tag-sentinel yes "$([ -f "$PL/.needs-investigation-nh-tagged" ] && echo yes || echo no)"
 rm -f "$PL/.needs-investigation-nh-prose" "$PL/.needs-investigation-nh-tagged"
 
-# Cleanup hook removes the investigation sentinels but LEAVES .review-ready
-# (owned by review-plan / the plugin's own cleanup).
+# Cleanup hook removes exactly its own investigation sentinels and nothing else.
+# The scoping half used to be asserted against .review-ready-<slug>; that
+# sentinel was retired 2026-07-26, so an unrelated marker stands in for it —
+# the property under test is "cleanup stays inside its KINDS list", not the
+# specific neighbour file.
 CLEAN="$(cd "$(dirname "$0")" && pwd)/plan-review-cleanup.py"
 [ -x "$CLEAN" ] || CLEAN="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/plan-review-cleanup.py"
-for k in review-ready needs-investigation investigated investigation-waived; do touch "$PL/.$k-inv"; done
+for k in unrelated-marker needs-investigation investigated investigation-waived; do touch "$PL/.$k-inv"; done
 pf inv | CLAUDE_PLANS_DIR="$PL" "$CLEAN" >/dev/null 2>&1
 check cleanup-removes-investigation no "$([ -e "$PL/.needs-investigation-inv" ] || [ -e "$PL/.investigated-inv" ] || [ -e "$PL/.investigation-waived-inv" ] && echo yes || echo no)"
-check cleanup-keeps-review-ready yes "$([ -e "$PL/.review-ready-inv" ] && echo yes || echo no)"
+check cleanup-stays-in-scope yes "$([ -e "$PL/.unrelated-marker-inv" ] && echo yes || echo no)"
 rm -f "$PL"/.*-inv
 
 touch "$PL/.needs-investigation-my-plan-" "$PL/.worktree-assessed-my-plan-"

@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""PreToolUse plan-review gate on ExitPlanMode.
+"""PreToolUse unknowns/investigation gate on ExitPlanMode.
 
-A plan cannot be presented for approval until three stages pass, in order,
+A plan cannot be presented for approval until two stages pass, in order,
 each failing OPEN so the gate can never brick planning:
 
-  Stage 1 — quality review. If review-plan wrote its `.review-ready-<slug>`
-    sentinel, good. Missing → a soft nudge (default) or a hard deny when
-    CLAUDE_PLAN_REQUIRE_REVIEW=1.
-
-  Stage 2 — unknowns audit. If the plan lacks an '## Open Unknowns' heading,
+  Stage 1 — unknowns audit. If the plan lacks an '## Open Unknowns' heading,
     the plan is sent to the OpenAI Codex CLI (read-only sandbox) for a
     cross-model unknowns review. Codex tags bullets needing active
     go-find-out research with `[investigate]`. If any are tagged, a
@@ -18,8 +14,8 @@ each failing OPEN so the gate can never brick planning:
     concrete resolution step), and only then record what remains under the
     heading and retry.
 
-  Stage 3 — investigation (closed loop). Once the heading exists, if the plan
-    has agentic unknowns (the sentinel from Stage 2, or `[investigate]`
+  Stage 2 — investigation (closed loop). Once the heading exists, if the plan
+    has agentic unknowns (the sentinel from Stage 1, or `[investigate]`
     markers in the plan text) that were neither investigated nor waived, the
     exit is denied until `/investigate-plan` runs (which drops
     `.investigated-<slug>`) or the user waives via `/waive-investigation`.
@@ -27,6 +23,14 @@ each failing OPEN so the gate can never brick planning:
     stage fails open.
 
 Opt out of the whole gate with CLAUDE_PLAN_UNKNOWNS_GATE=0.
+
+This gate does NOT check whether a quality review ran. That is owned solely by
+plan-oversight/soft_exit.py, which keys on plan content hash and gates on
+whether Material findings were dispositioned. A former Stage 1 here duplicated
+that question via a `.review-ready-<slug>` sentinel — a weaker test (file
+existence proves nothing about content) that also short-circuited the unknowns
+audit below whenever it hard-denied. Removed 2026-07-26; enforcement lives in
+PLAN_OVERSIGHT_STRICT_DISPOSITION=1, not CLAUDE_PLAN_REQUIRE_REVIEW.
 """
 
 import json
@@ -37,7 +41,7 @@ import subprocess
 import sys
 import tempfile
 
-CODEX_TIMEOUT_S = 150  # keep below the hook timeout in settings.json (180)
+CODEX_TIMEOUT_S = 840  # keep below the hook timeout in hooks.json (900)
 MAX_SECTION_CHARS = 8000  # cap on Codex output embedded in the deny reason
 PLANS_DIR = os.environ.get("CLAUDE_PLANS_DIR") or os.path.expanduser("~/.claude/plans")
 HERMES_CONTAINER = os.environ.get("INV_CONTAINER", "hermes")
@@ -131,16 +135,6 @@ the agentic unknowns and folds the findings into the plan); (2) "Waive investiga
 run /waive-investigation to record a conscious decision to proceed without investigating; \
 (3) "I'll revise the plan" — go back and edit the plan yourself. Then act on the user's \
 selection. Do not call ExitPlanMode again until the user has chosen."""
-
-REVIEW_REQUIRED_REASON = """CLAUDE_PLAN_REQUIRE_REVIEW is set, but review-plan has not \
-recorded a completed quality review for this plan (no `.review-ready-<slug>` sentinel). \
-Run the review-plan quality review, then call ExitPlanMode again."""
-
-REVIEW_NUDGE = (
-    "\U0001f4a1 Optional: this plan has no completed review-plan quality review "
-    "(`.review-ready-<slug>` sentinel absent). Consider running review-plan before "
-    "approving. (Set CLAUDE_PLAN_REQUIRE_REVIEW=1 to make this a hard gate.)"
-)
 
 
 # Opt-in (CLAUDE_PLAN_INVESTIGATE=1, off by default and independent of the
@@ -349,15 +343,7 @@ def main():
     if not (isinstance(cwd, str) and os.path.isdir(cwd)):
         cwd = os.getcwd()
 
-    # Stage 1 — quality review. Hard only when explicitly required; else a soft
-    # nudge on the allow path (can't distinguish "review skipped legitimately"
-    # from "not yet run", so default must never block).
-    require_review = os.environ.get("CLAUDE_PLAN_REQUIRE_REVIEW", "0") == "1"
-    review_missing = slug is not None and not sentinel_exists("review-ready", slug)
-    if require_review and review_missing:
-        deny(REVIEW_REQUIRED_REASON)
-
-    # Stage 2 — unknowns audit. Runs once, when the heading is still absent.
+    # Stage 1 — unknowns audit. Runs once, when the heading is still absent.
     if not has_unknowns_heading(plan):
         section = run_codex(plan, cwd)
         if section:
@@ -366,8 +352,8 @@ def main():
             deny(CODEX_REASON_TEMPLATE.format(section=section))
         deny(FALLBACK_REASON)
 
-    # Stage 3 — investigation of agentic unknowns (heading present, retry path).
-    # Triggered by the Stage-2 sentinel OR by [investigate] markers the agent
+    # Stage 2 — investigation of agentic unknowns (heading present, retry path).
+    # Triggered by the Stage-1 sentinel OR by [investigate] markers the agent
     # wrote directly. Needs a slug to track investigated/waived state; without
     # one we can't manage the loop, so fail open.
     if slug is not None:
@@ -380,7 +366,7 @@ def main():
                 deny(INVESTIGATION_REQUIRED_REASON)
             # container down → investigation impossible → fall through (allow)
 
-    allow(REVIEW_NUDGE if (review_missing and not require_review) else None)
+    allow(None)
 
 
 if __name__ == "__main__":

@@ -1,17 +1,24 @@
 # Handler Sync
 
-These three Python handlers are hand-synced by copy-paste, with no build step: `plan-review-cleanup.py`, `plan-unknowns-gate.py`, `plan-worktree-gate.py`.
+These three Python handlers are hand-synced by copy-paste, with no build step:
+`plan-review-cleanup.py`, `plan-unknowns-gate.py`, `plan-worktree-gate.py`.
 
-They are synced across three repos:
-- `hermes` (this repo), the canonical source of truth
-- `claude-craft`'s `planning-suite` plugin
-- local `claude-investigate-plan`
+They are synced across:
 
-To change a handler, edit it here in `hermes` first, then run:
-`sha256sum plan-review-cleanup.py plan-unknowns-gate.py plan-worktree-gate.py > CANONICAL.sha256`
-Run `bash run-tests.sh` for a single pass/fail check of sync integrity + both gate suites.
+1. **hermes-skills-marketplace** `plugins/plan-review/handlers/` (this repo)
+2. **claude-craft** `plugins/planning-suite/handlers/`
 
-Copy the three handler `.py` files and `CANONICAL.sha256` verbatim into the other two handler directories.
-Run `bash verify-sync.sh` in all three repos to confirm each copy matches its own manifest, then diff the three `CANONICAL.sha256` files against each other to confirm they are identical.
+After the 2026-07 plan-review consolidation (retired `.review-ready` ExitPlanMode
+gates; "was this plan reviewed?" owned by plan-oversight/soft_exit), both trees
+must carry the same three files + `CANONICAL.sha256`. Either repo may land a
+change first; the other must copy and re-verify before merge.
 
-This is a lightweight staleness tripwire: it catches in-place handler edits without re-syncing, but cannot detect a downstream repo that simply has not pulled a `hermes` change yet.
+To change a handler:
+
+1. Edit the `.py` file in one repo.
+2. `sha256sum plan-review-cleanup.py plan-unknowns-gate.py plan-worktree-gate.py > CANONICAL.sha256`
+3. Run `bash run-tests.sh` (or the per-handler `*.test.sh`).
+4. Copy the three `.py` files + `CANONICAL.sha256` (+ tests if changed) into the peer repo.
+5. Run `bash verify-sync.sh` in both repos; `diff` the two `CANONICAL.sha256` files.
+
+`claude-craft` CI fails if its `CANONICAL.sha256` diverges from hermes `main`.
