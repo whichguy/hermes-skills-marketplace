@@ -204,6 +204,27 @@
       "path": "skills/hermes-email-gateway/SKILL.md"
     },
     {
+      "name": "hermes-tweet",
+      "description": "Hermes Agent plugin and skill for X/Twitter research, timeline reading, post exploration, and explicitly gated posting actions through Xquik.",
+      "category": "research",
+      "version": "1.0.0",
+      "author": "Xquik",
+      "license": "MIT",
+      "platforms": [
+        "linux",
+        "macos",
+        "windows"
+      ],
+      "requires_toolsets": [],
+      "config_keys": [
+        "hermes-tweet.enabled"
+      ],
+      "required_env": [
+        "XQUIK_API_KEY"
+      ],
+      "path": "skills/hermes-tweet/SKILL.md"
+    },
+    {
       "name": "hermes-whatsapp-gateway",
       "description": "Configure, pair, verify, and troubleshoot the Hermes Gateway WhatsApp platform (Baileys bridge).",
       "category": "productivity",

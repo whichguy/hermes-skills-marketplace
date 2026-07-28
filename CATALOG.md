@@ -1,6 +1,6 @@
 # Hermes Skills Marketplace Catalog
 
-<!-- 29 skills -->
+<!-- 30 skills -->
 
 ## All Skills
 
@@ -17,6 +17,7 @@
 | [hermes-config-git-backup](skills/hermes-config-git-backup/SKILL.md) | devops | Version-control a Hermes Agent setup to a private GitHub rep |
 | [hermes-ecosystem-research](skills/hermes-ecosystem-research/SKILL.md) | autonomous-ai-agents | Research the Hermes Agent community ecosystem to recommend s |
 | [hermes-email-gateway](skills/hermes-email-gateway/SKILL.md) | productivity | Configure, verify, and troubleshoot Hermes Gateway email pla |
+| [hermes-tweet](skills/hermes-tweet/SKILL.md) | research | Hermes Agent plugin and skill for X/Twitter research, timeli |
 | [hermes-whatsapp-gateway](skills/hermes-whatsapp-gateway/SKILL.md) | productivity | Configure, pair, verify, and troubleshoot the Hermes Gateway |
 | [home-assistant-smart-home-control](skills/home-assistant-smart-home-control/SKILL.md) | productivity | Control and troubleshoot smart-home devices through Home Ass |
 | [html-artifact](skills/html-artifact/SKILL.md) | creative | Build self-contained HTML files to explain, plan, or review. |
