@@ -2,6 +2,10 @@
 # Regression suite for plan-worktree-gate.py. Run: ./plan-worktree-gate.test.sh
 # All cases avoid live codex calls by using a stub or a PATH without codex.
 set -u
+# Hermetic: CLAUDE_PLAN_* switch gate behaviour on/off. A developer shell that exports one
+# (e.g. CLAUDE_PLAN_WORKTREE_GATE=0) must not change this suite's outcome — it turns 14
+# cases red on a laptop while CI (clean env) stays green.
+for v in $(compgen -e | grep '^CLAUDE_PLAN'); do unset "$v"; done
 G="$(cd "$(dirname "$0")" && pwd)/plan-worktree-gate.py"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fails=0
@@ -121,15 +125,16 @@ rm -f "$MARK"
 echo "$EDITED_PAYLOAD" | PATH="$CX:/usr/bin:/bin" CODEX_MARKER="$MARK" CODEX_OUTPUT="$SECTION" CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"; rc=$?
 check memoize-invalidate "allow rc0 yes" "$(outcome $T/o) rc$rc $(called)"
 
+# The retired investigation stage no longer defers this gate: a plan with an [investigate] bullet is assessed like any
+# other, with or without a leftover sentinel from an older version.
 DEFER_PAYLOAD="$(py "{'tool_name':'ExitPlanMode','tool_input':{'plan':'# P\\n\\nmutate files\\n\\n## Open Unknowns\\n\\n- Verify runtime behavior. [investigate]','planFilePath':'$T/plan-defer.md'},'cwd':'$NW'}")"
 : > "$PL/.needs-investigation-plan-defer"
 rm -f "$PL/.investigated-plan-defer" "$PL/.investigation-waived-plan-defer" "$PL/.worktree-assessed-plan-defer" "$MARK"
 echo "$DEFER_PAYLOAD" | PATH="$CX:/usr/bin:/bin" CODEX_MARKER="$MARK" CODEX_OUTPUT="$SECTION" CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"; rc=$?
-check investigation-defer "allow rc0 no" "$(outcome $T/o) rc$rc $(called)"
-: > "$PL/.investigation-waived-plan-defer"
-rm -f "$MARK"
+check investigation-tag-no-longer-defers "allow rc0 yes" "$(outcome $T/o) rc$rc $(called)"
+rm -f "$PL/.needs-investigation-plan-defer" "$PL/.worktree-assessed-plan-defer" "$MARK"
 echo "$DEFER_PAYLOAD" | PATH="$CX:/usr/bin:/bin" CODEX_MARKER="$MARK" CODEX_OUTPUT="$SECTION" CLAUDE_PLANS_DIR="$PL" "$G" > "$T/o"; rc=$?
-check investigation-waived-runs "allow rc0 yes" "$(outcome $T/o) rc$rc $(called)"
+check investigation-tag-assessed-without-sentinel "allow rc0 yes" "$(outcome $T/o) rc$rc $(called)"
 
 if command -v git >/dev/null 2>&1; then
     REPO="$T/git-repo"; LINKED="$T/linked-wt"

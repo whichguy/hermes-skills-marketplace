@@ -99,25 +99,7 @@ RESULT="$("$DOCKER" exec \
 RC=$?
 set -e
 
-# Emit the investigator result verbatim on stdout (the /investigate-plan skill
-# parses it). Preserved exactly — the sentinel below is a side effect.
+# Emit the investigator result verbatim on stdout (the /investigate-plan skill parses it).
 printf '%s\n' "$RESULT"
-
-# Host-visible proof of investigation. The plan-review gate runs on the HOST and
-# cannot see the container run-dir, so on a successful (non-error) result drop a
-# sentinel it can stat: ~/.claude/plans/.investigated-<slug>. Slug matches the
-# gate's (plan basename). Best-effort — never fail the run over the sentinel.
-if [ "$RC" -eq 0 ] && ! printf '%s' "$RESULT" | grep -q '"error"'; then
-  HOST_PLANS="${CLAUDE_PLANS_DIR:-$HOME/.claude/plans}"
-  SUMMARY="$(printf '%s' "$RESULT" | python3 -c 'import json,sys
-try:
-    d = json.load(sys.stdin)
-    print("n_answered=%s n_gaps=%s stop=%s" % (d.get("n_answered"), d.get("n_gaps"), d.get("stop_reason")))
-except Exception:
-    print("investigation completed")' 2>/dev/null || printf 'investigation completed')"
-  { mkdir -p "$HOST_PLANS" && printf '%s  run-dir=%s  %s\n' \
-      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RUN_DIR" "$SUMMARY" \
-      > "$HOST_PLANS/.investigated-$SLUG"; } 2>/dev/null || true
-fi
 
 exit "$RC"
