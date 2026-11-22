@@ -83,18 +83,14 @@ case "$run_base" in *[!A-Za-z0-9._-]*|'') safe=no ;; *) safe=yes ;; esac
 check slug-sanitization yes "$safe"
 check run-command 'hermes sh -lc' "$(cat "$T/log/run_args")"
 
-# --- Tier 2b: host proof sentinel for the plan-review gate ------------------
-# A successful (non-error) run drops ~/.claude/plans/.investigated-<slug> so the
-# host-side gate can confirm investigation ran. Isolated via CLAUDE_PLANS_DIR.
+# --- Tier 2b: the wrapper writes nothing on the host ------------------------
+# It used to drop ~/.claude/plans/.investigated-<slug> as proof for a closed-loop gate. That gate is gone.
 PLD="$T/plans"; mkdir -p "$PLD"
 : > "$T/log/args"
 printf '%s' 'prob' | FAKE_MODE=happy FAKE_DOCKER_LOG="$T/log" INV_DOCKER_BIN="$FAKE" CLAUDE_PLANS_DIR="$PLD" "$G" --slug sentinel-slug > "$T/o" 2>/dev/null
-check sentinel-written yes "$([ -s "$PLD/.investigated-sentinel-slug" ] && echo yes || echo no)"
-check sentinel-stdout-intact '{"tombstones":[],"stop_reason":"x"}' "$(cat "$T/o")"
-# error path (container down) must NOT write a sentinel
-: > "$T/log/args"
-printf '%s' 'prob' | FAKE_MODE=down FAKE_DOCKER_LOG="$T/log" INV_DOCKER_BIN="$FAKE" CLAUDE_PLANS_DIR="$PLD" "$G" --slug down-slug > "$T/o" 2>/dev/null
-check sentinel-none-on-error no "$([ -f "$PLD/.investigated-down-slug" ] && echo yes || echo no)"
+check no-sentinel-written no "$([ -e "$PLD/.investigated-sentinel-slug" ] && echo yes || echo no)"
+check plans-dir-untouched 0 "$(ls -A "$PLD" | wc -l | tr -d ' ')"
+check stdout-intact '{"tombstones":[],"stop_reason":"x"}' "$(cat "$T/o")"
 
 # --- Tier 3: live Docker integration (opt-in) ------------------------------
 if [ "${INVESTIGATE_TEST_LIVE:-0}" != 1 ]; then

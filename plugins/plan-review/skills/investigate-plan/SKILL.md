@@ -12,9 +12,8 @@ description: >-
 
 # investigate-plan
 
-Turn a plan's **Open Unknowns** from disclaimers into resolved facts. This is the
-user-invoked companion to the `plan-unknowns-gate` ExitPlanMode hook: the gate
-*identifies* unknowns; this skill *resolves* the researchable ones with the Hermes
+Turn a plan's **Open Unknowns** from disclaimers into resolved facts. This is a
+user-invoked skill: it *resolves* the researchable unknowns with the Hermes
 **investigator** (autonomous, agentic "go find out") and improves the plan in place.
 
 Run it while still in plan mode, before the user approves the plan.
@@ -25,7 +24,7 @@ Run it while still in plan mode, before the user approves the plan.
   running a reversible experiment, probing a reachable service, checking something that
   can't be settled by reading the repo.
 - **Do NOT hand off** unknowns you can resolve yourself by reading the repo or docs —
-  resolve those directly in plan mode (that is the existing gate's job). Only *agentic*
+  resolve those directly in plan mode. Only *agentic*
   unknowns go to the investigator.
 - The investigator runs **inside the `hermes` container** and researches from *there*.
   It cannot see host-only files that aren't reachable from the container, so keep
@@ -112,8 +111,7 @@ Summarize what was resolved vs what remains, then let the user approve the impro
   rather than answering your exact bullets one-for-one — that's why step 3 emphasizes the
   target unknowns in the problem string.
 - This skill never approves a plan and never fires automatically; it runs only when you
-  invoke it. Discoverability at plan-review time is provided (opt-in) by the
-  `plan-unknowns-gate` hook when `CLAUDE_PLAN_INVESTIGATE=1`.
+  invoke it.
 
 ## Verification
 

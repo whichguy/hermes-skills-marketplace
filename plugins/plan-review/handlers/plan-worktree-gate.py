@@ -23,11 +23,9 @@ import tempfile
 CODEX_TIMEOUT_S = 840
 MAX_SECTION_CHARS = 8000  # cap on Codex output embedded in a message/reason
 PLANS_DIR = os.environ.get("CLAUDE_PLANS_DIR") or os.path.expanduser("~/.claude/plans")
-INVESTIGATE_TAG = "[investigate]"
 
 # Markdown heading line: up to 3 spaces indent, 1-6 hashes, then a space.
 HEADING_RE = re.compile(r"^[ \t]{0,3}(#{1,6})[ \t]+(.*)$")
-BULLET_RE = re.compile(r"^[ \t]*([-*+]|[0-9]+[.)])[ \t]+")
 # Codex output heading may omit the space after the hashes; be lenient here
 # and normalize to the canonical form before it reaches the plan.
 SECTION_HEAD_RE = re.compile(
@@ -130,7 +128,7 @@ def get_plan_text(tool_input):
 
 
 def plan_slug(tool_input):
-    """Plan basename without .md, matching the investigator's --slug. None if absent."""
+    """Plan basename without .md, sanitised the way plan-review-cleanup.py does. None if absent."""
     path = tool_input.get("planFilePath")
     if isinstance(path, str) and path:
         base = os.path.basename(path)
@@ -145,10 +143,6 @@ def sentinel_path(kind, slug):
     return os.path.join(PLANS_DIR, ".%s-%s" % (kind, slug))
 
 
-def sentinel_exists(kind, slug):
-    return slug is not None and os.path.exists(sentinel_path(kind, slug))
-
-
 def write_sentinel(kind, slug, content=""):
     if slug is None:
         return
@@ -158,20 +152,6 @@ def write_sentinel(kind, slug, content=""):
             f.write(content)
     except OSError:
         pass
-
-
-def has_investigate_tag(text):
-    """True if a non-fenced markdown bullet ends with '[investigate]'."""
-    in_fence = False
-    for line in text.splitlines():
-        if FENCE_RE.match(line):
-            in_fence = not in_fence
-            continue
-        if in_fence:
-            continue
-        if BULLET_RE.match(line) and line.rstrip().endswith(INVESTIGATE_TAG):
-            return True
-    return False
 
 
 def plan_hash(plan):
@@ -307,14 +287,6 @@ def main():
     if os.environ.get("CLAUDE_PLAN_UNKNOWNS_GATE", "1") != "0" \
             and not has_unknowns_heading(plan):
         allow()
-
-    # The unknowns gate will deny unresolved investigation, so defer this
-    # assessment until the plan is mature enough to proceed.
-    if os.environ.get("CLAUDE_PLAN_UNKNOWNS_GATE", "1") != "0" and slug is not None:
-        if (sentinel_exists("needs-investigation", slug) or has_investigate_tag(plan)) \
-                and not sentinel_exists("investigated", slug) \
-                and not sentinel_exists("investigation-waived", slug):
-            allow()
 
     cwd = payload.get("cwd")
     if not (isinstance(cwd, str) and os.path.isdir(cwd)):

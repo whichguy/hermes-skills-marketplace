@@ -4,10 +4,10 @@ title: Investigate Plan — Claude Code adapter
 description: >-
   Use from Claude Code plan mode when the user invokes "/investigate-plan", asks to
   "investigate this plan", "research the plan's unknowns", or "resolve the open
-  unknowns before I approve". This Claude Code plan-mode companion to the
-  plan-unknowns-gate hook drives the Hermes investigator skill to research agentic
+  unknowns before I approve". This Claude Code plan-mode adapter drives the Hermes
+  investigator skill to research agentic
   unknowns, fold resolved facts into the plan, and return it for approval.
-version: 1.0.0
+version: 1.0.1
 author: agent
 license: MIT
 platforms: [linux, macos]
@@ -41,9 +41,8 @@ metadata:
 > the container-side `investigator` skill; it is NOT runnable from inside the hermes runtime.
 > Requires a running `hermes` container + Claude Code.
 
-Turn a plan's **Open Unknowns** from disclaimers into resolved facts. This is the
-user-invoked companion to the `plan-unknowns-gate` ExitPlanMode hook: the gate
-*identifies* unknowns; this skill *resolves* the researchable ones with the Hermes
+Turn a plan's **Open Unknowns** from disclaimers into resolved facts. This is a
+user-invoked skill: it *resolves* the researchable unknowns with the Hermes
 **investigator** (autonomous, agentic "go find out") and improves the plan in place.
 
 Run it while still in plan mode, before the user approves the plan.
@@ -136,8 +135,6 @@ Summarize what was resolved and what remains, then return the improved plan for 
 - Fidelity caveat: the investigator re-derives its own questions from the problem text rather
   than answering exact bullets one-for-one. Step 3 therefore emphasizes the target unknowns.
 - This adapter never approves a plan and never fires automatically; it runs only when invoked.
-  Discoverability at plan-review time is provided, opt-in, by the `plan-unknowns-gate` hook when
-  `CLAUDE_PLAN_INVESTIGATE=1`.
 - See [references/design.md](references/design.md) for the host-to-container contract and
   tombstone schema.
 

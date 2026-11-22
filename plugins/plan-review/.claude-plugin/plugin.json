@@ -1,7 +1,7 @@
 {
   "name": "plan-review",
-  "version": "0.1.0",
-  "description": "Closed-loop plan-review gate on ExitPlanMode: Codex unknowns audit + agentic-investigation gate, with the /investigate-plan adapter (drives the Hermes investigator in the hermes container) and /waive-investigation.",
+  "version": "0.2.0",
+  "description": "Plan-review gate on ExitPlanMode (Codex unknowns audit), with a standalone /investigate-plan adapter that drives the Hermes investigator in the hermes container.",
   "author": {
     "name": "whichguy",
     "url": "https://github.com/whichguy"
