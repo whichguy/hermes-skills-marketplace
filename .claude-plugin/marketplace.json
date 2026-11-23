@@ -4,13 +4,13 @@
     "name": "whichguy",
     "url": "https://github.com/whichguy"
   },
-  "description": "Claude Code plugin face of the Hermes skills hub. Hosts plan-review (the ExitPlanMode unknowns gate + a standalone /investigate-plan adapter) alongside the repo's Hermes-native skills. Hermes reads .well-known/skills + skills/; Claude Code reads this manifest + plugins/.",
+  "description": "Claude Code plugin face of the Hermes skills hub. Hosts plan-review (the ExitPlanMode unknowns gate) alongside the repo's Hermes-native skills. Hermes reads .well-known/skills + skills/; Claude Code reads this manifest + plugins/.",
   "plugins": [
     {
       "name": "plan-review",
       "source": "./plugins/plan-review",
-      "version": "0.2.0",
-      "description": "Plan-review gate on ExitPlanMode (Codex unknowns audit) plus a standalone /investigate-plan adapter."
+      "version": "0.3.0",
+      "description": "Plan-review gate on ExitPlanMode (Codex unknowns audit)."
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "name": "plan-review",
-  "version": "0.2.0",
-  "description": "Plan-review gate on ExitPlanMode (Codex unknowns audit), with a standalone /investigate-plan adapter that drives the Hermes investigator in the hermes container.",
+  "version": "0.3.0",
+  "description": "Plan-review gate on ExitPlanMode (Codex unknowns audit).",
   "author": {
     "name": "whichguy",
     "url": "https://github.com/whichguy"
@@ -9,6 +9,6 @@
   "homepage": "https://github.com/whichguy/hermes-skills-marketplace",
   "repository": "https://github.com/whichguy/hermes-skills-marketplace",
   "license": "MIT",
-  "keywords": ["claude-code", "plan-review", "hooks", "investigate"],
+  "keywords": ["claude-code", "plan-review", "hooks"],
   "dependencies": []
 }
